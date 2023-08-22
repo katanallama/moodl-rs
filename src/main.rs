@@ -14,10 +14,10 @@ use ws::api_config::ApiConfig;
 
 #[derive(Parser)]
 struct Cli {
-    #[arg(short, long)]
+    #[clap(short, long)]
     wstoken: String,
-    #[arg(short, long)]
-    courseid: i32,
+    #[clap(short, long)]
+    courseid: Option<i32>,
 }
 
 #[tokio::main]
@@ -51,10 +51,12 @@ async fn main() -> Result<(), CustomError> {
         api_config
             .call("core_enrol_get_users_courses", process_courses)
             .await?;
-        api_config.courseid = Some(args.courseid);
-        api_config
-            .call("gradereport_user_get_grades_table", process_grades)
-            .await?;
+        if args.courseid.is_some() {
+            api_config.courseid = args.courseid;
+            api_config
+                .call("gradereport_user_get_grades_table", process_grades)
+                .await?;
+        }
     }
 
     Ok(())
