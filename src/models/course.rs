@@ -1,3 +1,6 @@
+// models/course.rs
+//
+use crate::process_result::ProcessResult;
 use serde_derive::Deserialize;
 use serde_json;
 
@@ -42,7 +45,7 @@ pub struct OverviewFile {
     pub mimetype: String,
 }
 
-pub fn process_courses(response_text: &str) -> Result<(), serde_json::Error> {
+pub fn process_courses(response_text: &str) -> Result<ProcessResult, serde_json::Error> {
     // Deserialize the response into a Vec<Course>
     let courses: Vec<Course> = serde_json::from_str(response_text)?;
 
@@ -54,5 +57,5 @@ pub fn process_courses(response_text: &str) -> Result<(), serde_json::Error> {
         );
     }
 
-    Ok(())
+    Ok(ProcessResult::None)
 }

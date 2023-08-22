@@ -1,6 +1,10 @@
+// models/course_grades.rs
+//
+use crate::process_result::ProcessResult;
+
+use scraper;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
-use scraper;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiResponse {
@@ -45,7 +49,7 @@ fn sanitize_html(input: &str) -> String {
     text.trim().to_string()
 }
 
-pub fn process_grades(response_text: &str) -> Result<(), serde_json::Error> {
+pub fn process_grades(response_text: &str) -> Result<ProcessResult, serde_json::Error> {
     // Deserialize the response into ApiResponse
     let response: ApiResponse = serde_json::from_str(response_text)?;
 
@@ -79,5 +83,5 @@ pub fn process_grades(response_text: &str) -> Result<(), serde_json::Error> {
         }
     }
 
-    Ok(())
+    Ok(ProcessResult::None)
 }
