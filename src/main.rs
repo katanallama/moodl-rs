@@ -32,27 +32,22 @@ async fn main() -> Result<(), CustomError> {
         url: "https://urcourses.uregina.ca/webservice/rest/server.php",
     };
 
-    let result = api_config
+    if let ProcessResult::UserId(id) = api_config
         .call(
             "block_recentlyaccesseditems_get_recent_items",
             process_recents,
         )
-        .await?;
-
-    match result {
-        ProcessResult::UserId(id) => {
-            println!("Stored User ID: {}", id);
-            api_config.userid = Some(id);
-        }
-        ProcessResult::None => {}
+        .await?
+    {
+        println!("Stored User ID: {}", id);
+        api_config.userid = Some(id);
     }
 
     if api_config.userid.is_some() {
-        api_config
-            .call("core_enrol_get_users_courses", process_courses)
-            .await?;
-        if args.courseid.is_some() {
-            api_config.courseid = args.courseid;
+        api_config.call("core_enrol_get_users_courses", process_courses).await?;
+
+        if let Some(course_id) = args.courseid {
+            api_config.courseid = Some(course_id);
             api_config
                 .call("gradereport_user_get_grades_table", process_grades)
                 .await?;
