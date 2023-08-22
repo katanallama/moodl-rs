@@ -24,7 +24,6 @@ pub fn process_recents(response_text: &str) -> Result<ProcessResult, serde_json:
     let recents: Vec<Recent> = serde_json::from_str(response_text)?;
 
     for recent in recents {
-        println!("User ID :\t{}\n", recent.userid);
         return Ok(ProcessResult::UserId(recent.userid));
     }
 
