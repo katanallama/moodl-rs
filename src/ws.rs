@@ -1,10 +1,10 @@
-// api/api_config.rs
+// ws.rs
 //
 use crate::models::response::{ApiParams, CustomError};
 use crate::process_result::ProcessResult;
 
 pub struct ApiConfig {
-    pub wstoken: String,
+    pub wstoken: Option<String>,
     pub courseid: Option<i32>,
     pub userid: Option<i32>,
     pub client: reqwest::Client,

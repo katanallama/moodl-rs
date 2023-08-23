@@ -1,13 +1,32 @@
 * Moodl-rs
 
-Replace <wstoken> with the key for "Moodle Mobile additional features service", it shouldn't break if ~<courseid>~ is '111' until you run it once and get all courses.
+
+
+To init the db and courses:
 
 #+begin_src sh
-cargo run -- --wstoken <wstoken> --courseid <courseid> --userid <userid>
+cargo run -- --wstoken <wstoken>
 #+end_src
 
-Get <userid> with this for now from the browser:
+To fetch grades for a given course:
 
 #+begin_src sh
-https://urcourses.uregina.ca/webservice/rest/server.php?wstoken=<wstoken>&wsfunction=core_webservice_get_site_info&moodlewsrestformat=json
+cargo run -- --wstoken <wstoken> --courseid <courseid>
 #+end_src
+
+Replace ~<wstoken>~ with your "Moodle Mobile additional features service" key.
+
+
+* Roadmap
+
+*** TODO Implement SQLite for persistent storage
+
+*** TODO Improved CLI
+
+**** TODO Improved config handling
+
+**** TODO Course selection and archiving
+
+*** TODO Parsing course contents to ~.org~ or ~.md~
+
+*** TODO Checking for and parsing updates

@@ -13,31 +13,30 @@ pub struct ApiResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Table {
-    courseid: u32,
-    userid: u32,
-    userfullname: String,
-    maxdepth: u8,
-    tabledata: Vec<TableData>,
+    pub courseid: u32,
+    pub userid: u32,
+    pub userfullname: String,
+    pub maxdepth: u8,
+    pub tabledata: Vec<TableData>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TableData {
-    itemname: Option<ItemDetails>,
-    leader: Option<ItemDetails>,
-    weight: Option<ItemDetails>,
-    grade: Option<ItemDetails>,
-    range: Option<ItemDetails>,
-    feedback: Option<ItemDetails>,
-    contributiontocoursetotal: Option<ItemDetails>,
-    parentcategories: Vec<u32>,
+    pub itemname: Option<ItemDetails>,
+    pub leader: Option<ItemDetails>,
+    pub weight: Option<ItemDetails>,
+    pub grade: Option<ItemDetails>,
+    pub range: Option<ItemDetails>,
+    pub feedback: Option<ItemDetails>,
+    pub contributiontocoursetotal: Option<ItemDetails>,
+    parentcategories: Option<Vec<u32>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ItemDetails {
-    #[serde(rename = "class")]
-    class_name: String,
+    class: String,
     colspan: Option<u8>,
-    content: Option<String>,
+    pub content: Option<String>,
     id: Option<String>,
     rowspan: Option<u8>,
     headers: Option<String>,
@@ -50,38 +49,30 @@ fn sanitize_html(input: &str) -> String {
 }
 
 pub fn process_grades(response_text: &str) -> Result<ProcessResult, serde_json::Error> {
-    // Deserialize the response into ApiResponse
     let response: ApiResponse = serde_json::from_str(response_text)?;
 
-    // Use the deserialized data
-    for table in response.tables {
-        println!("Course ID: {}", table.courseid);
-        println!("User ID: {}", table.userid);
-        println!("User Full Name: {}", table.userfullname);
-        println!("---------------------------");
+    let mut processed_tables = Vec::new();
 
-        for data in table.tabledata {
-            if let Some(item_details) = &data.itemname {
-                if let Some(ref content) = item_details.content {
-                    let sanitized_name = sanitize_html(content);
-                    println!("Name: {}", sanitized_name);
+    for mut table in response.tables {
+        for data in &mut table.tabledata {
+            if let Some(item_details) = &mut data.itemname {
+                if let Some(content) = &mut item_details.content {
+                    *content = sanitize_html(content);
                 }
             }
-            if let Some(item_details) = &data.grade {
-                if let Some(ref content) = item_details.content {
-                    let sanitized_grade = sanitize_html(content);
-                    println!("Grade: {}", sanitized_grade);
+            if let Some(item_details) = &mut data.grade {
+                if let Some(content) = &mut item_details.content {
+                    *content = sanitize_html(content);
                 }
             }
-            if let Some(item_details) = &data.feedback {
-                if let Some(ref content) = item_details.content {
-                    let sanitized_feedback = sanitize_html(content);
-                    println!("Feedback: {}", sanitized_feedback);
+            if let Some(item_details) = &mut data.feedback {
+                if let Some(content) = &mut item_details.content {
+                    *content = sanitize_html(content);
                 }
             }
-            println!("---------------------------");
         }
+        processed_tables.push(table);
     }
 
-    Ok(ProcessResult::None)
+    Ok(ProcessResult::Grades(processed_tables))
 }
