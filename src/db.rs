@@ -7,6 +7,10 @@ use rusqlite::{Connection, Result};
 pub fn initialize_db() -> Result<Connection> {
     let conn = Connection::open("moodl-rs.db")?;
 
+    Ok(conn)
+}
+
+pub fn create_user_table(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS user (
              id INTEGER PRIMARY KEY,
@@ -16,9 +20,8 @@ pub fn initialize_db() -> Result<Connection> {
         (),
     )?;
 
-    println!("[INFO] Database and user table created");
-
-    Ok(conn)
+    println!("[INFO] User table has been created");
+    Ok(())
 }
 
 pub fn create_courses_table(conn: &Connection) -> Result<()> {
@@ -215,8 +218,20 @@ pub fn get_grades(
 }
 
 pub fn get_user(conn: &Connection, id: Option<i32>) -> Result<Option<(i32, String, String)>> {
-    let mut stmt = conn.prepare("SELECT id, wstoken, url FROM user WHERE id = ?1")?;
-    let mut user_iter = stmt.query_map([id], |row| {
+    let sql;
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+    if let Some(user_id) = id {
+        sql = "SELECT id, wstoken, url FROM user WHERE id = ?1";
+        params.push(Box::new(user_id));
+    } else {
+        sql = "SELECT id, wstoken, url FROM user LIMIT 1";
+    }
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(AsRef::as_ref).collect();
+
+    let mut stmt = conn.prepare(sql)?;
+    let mut user_iter = stmt.query_map(&*params_refs, |row| {
         Ok((
             row.get(0)?, // id
             row.get(1)?, // wstoken

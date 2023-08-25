@@ -6,8 +6,9 @@ mod ws;
 
 use clap::Parser;
 use db::{
-    create_courses_table, create_grades_table, get_grades, get_user, initialize_db, insert_course,
+    create_courses_table, create_grades_table, get_grades, initialize_db, insert_course,
     insert_grade, insert_user,
+    create_user_table
 };
 use models::course::process_courses;
 use models::course_grades::process_grades;
@@ -36,40 +37,22 @@ enum Command {
 #[tokio::main]
 async fn main() -> Result<(), CustomError> {
     let args = Cli::parse();
-
     let conn = initialize_db()?;
 
     let mut api_config = if let Some(Command::Init) = args.cmd {
-        init()?
+        init(&conn)?
     } else {
-        // Try to get the user details from the database
-        match get_user(&conn, None) {
-            Ok(Some((_, wstoken, url))) => ApiConfig {
-                wstoken,
-                courseid: None,
-                userid: None,
-                client: reqwest::Client::new(),
-                url,
-            },
-            Ok(None) => {
-                // Handle the case where the user is not found in the db or no db
-                return Err(CustomError::Io(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "Database not found or User not found in database. Please run the init command.",
-                )));
-            }
-            Err(e) => return Err(models::response::CustomError::Rusqlite(e)),
-        }
+        ApiConfig::get_saved_api_config(&conn)?
     };
 
     process_user(&conn, &mut api_config).await?;
     process_courses_to_add(&conn, &mut api_config).await?;
-    display_grades_for_course(&conn, args.courseid)?;
 
     Ok(())
 }
 
-fn init() -> Result<ApiConfig, CustomError> {
+fn init(conn: &rusqlite::Connection) -> Result<ApiConfig, CustomError> {
+    create_user_table(conn)?;
     // Prompt for wstoken
     print!("Moodle Mobile additional features service key : ");
     io::stdout().flush()?;
@@ -132,7 +115,7 @@ async fn process_courses_to_add(
     conn: &rusqlite::Connection,
     api_config: &mut ApiConfig,
 ) -> Result<(), CustomError> {
-    let courses_to_add = vec!["353", "351"];
+    let courses_to_add = vec!["353", "351", "452", "472"];
     if api_config.userid.is_some() {
         let result = api_config
             .call("core_enrol_get_users_courses", process_courses)

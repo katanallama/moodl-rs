@@ -1,7 +1,10 @@
 // ws.rs
 //
+use crate::db::get_user;
 use crate::models::response::{ApiParams, CustomError};
 use crate::process_result::ProcessResult;
+
+use std::io::{self};
 
 pub struct ApiConfig {
     pub client: reqwest::Client,
@@ -40,5 +43,22 @@ impl ApiConfig {
             .await?;
 
         Ok(process_fn(&response_text)?)
+    }
+
+    pub fn get_saved_api_config(conn: &rusqlite::Connection) -> Result<Self, CustomError> {
+        match get_user(&conn, None) {
+            Ok(Some((_, wstoken, url))) => Ok(ApiConfig {
+                wstoken,
+                courseid: None,
+                userid: None,
+                client: reqwest::Client::new(),
+                url,
+            }),
+            Ok(None) => Err(CustomError::Io(io::Error::new(
+                io::ErrorKind::NotFound,
+                "User not found in database. Please run the init command.",
+            ))),
+            Err(e) => Err(CustomError::Rusqlite(e)),
+        }
     }
 }
