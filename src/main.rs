@@ -100,16 +100,14 @@ async fn main() -> Result<(), CustomError> {
             Ok(grades) => {
                 for (itemname, grade, feedback) in grades {
                     if let Some(name) = &itemname {
-                        println!("Item Name: {}", name);
-                    }
-
-                    if let Some(g) = grade {
-                        println!("Grade: {}", g);
+                        if let Some(g) = grade {
+                            println!("{}\t|\tGrade: {}", name, g);
+                        }
                     }
 
                     if let Some(fb) = &feedback {
                         println!("Feedback: {}", fb);
-                        println!("---------------------------");
+                        println!("------------------------------------------------------");
                     }
                 }
             }
