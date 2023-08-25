@@ -6,7 +6,7 @@ mod ws;
 
 use clap::Parser;
 use db::{
-    create_courses_table, create_grades_table, get_grades, initialize_db, insert_course,
+    create_courses_table, create_grades_table, get_grades, get_user, initialize_db, insert_course,
     insert_grade, insert_user,
 };
 use models::course::process_courses;
@@ -15,6 +15,7 @@ use models::recents::process_recents;
 use models::response::CustomError;
 use process_result::ProcessResult;
 use reqwest;
+use std::io::{self, Write};
 use ws::ApiConfig;
 
 #[derive(Parser)]
@@ -23,22 +24,92 @@ struct Cli {
     wstoken: Option<String>,
     #[clap(short, long)]
     courseid: Option<i32>,
+    #[clap(subcommand)]
+    cmd: Option<Command>,
+}
+
+#[derive(Parser)]
+enum Command {
+    Init,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), CustomError> {
     let args = Cli::parse();
+
     let conn = initialize_db()?;
 
-    let mut api_config = ApiConfig {
-        wstoken: args.wstoken,
+    let mut api_config = if let Some(Command::Init) = args.cmd {
+        init()?
+    } else {
+        // Try to get the user details from the database
+        match get_user(&conn, None) {
+            Ok(Some((_, wstoken, url))) => ApiConfig {
+                wstoken,
+                courseid: None,
+                userid: None,
+                client: reqwest::Client::new(),
+                url,
+            },
+            Ok(None) => {
+                // Handle the case where the user is not found in the db or no db
+                return Err(CustomError::Io(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Database not found or User not found in database. Please run the init command.",
+                )));
+            }
+            Err(e) => return Err(models::response::CustomError::Rusqlite(e)),
+        }
+    };
+
+    process_user(&conn, &mut api_config).await?;
+    process_courses_to_add(&conn, &mut api_config).await?;
+    display_grades_for_course(&conn, args.courseid)?;
+
+    Ok(())
+}
+
+fn init() -> Result<ApiConfig, CustomError> {
+    // Prompt for wstoken
+    print!("Moodle Mobile additional features service key : ");
+    io::stdout().flush()?;
+    let mut wstoken = String::new();
+    io::stdin().read_line(&mut wstoken)?;
+    let wstoken = wstoken.trim().to_string();
+
+    if wstoken.is_empty() {
+        return Err(CustomError::Io(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Moodle key is required!",
+        )));
+    }
+
+    // Prompt for url
+    print!("Moodle url (RTN for default) : ");
+    io::stdout().flush()?;
+    let mut url = String::new();
+    io::stdin().read_line(&mut url)?;
+    let url = if url.trim().is_empty() {
+        "https://urcourses.uregina.ca/webservice/rest/server.php".to_string()
+    } else {
+        url.trim().to_string()
+    };
+
+    let api_config = ApiConfig {
+        wstoken,
         courseid: None,
         userid: None,
         client: reqwest::Client::new(),
-        url: "https://urcourses.uregina.ca/webservice/rest/server.php",
+        url,
     };
 
-    // Get userid and create table
+    Ok(api_config)
+}
+
+async fn process_user(
+    conn: &rusqlite::Connection,
+    api_config: &mut ApiConfig,
+) -> Result<(), CustomError> {
     if let ProcessResult::UserId(id) = api_config
         .call(
             "block_recentlyaccesseditems_get_recent_items",
@@ -47,38 +118,37 @@ async fn main() -> Result<(), CustomError> {
         .await?
     {
         api_config.userid = Some(id);
-
-        // Inser user data into db
         insert_user(
-            &conn,
+            conn,
             id,
-            api_config.wstoken.clone().expect("wstoken is missing!"),
+            api_config.wstoken.clone(),
             api_config.url.to_string(),
         )?;
     }
+    Ok(())
+}
 
-    // Course numbers to add
+async fn process_courses_to_add(
+    conn: &rusqlite::Connection,
+    api_config: &mut ApiConfig,
+) -> Result<(), CustomError> {
     let courses_to_add = vec!["353", "351"];
-
-    // Get courses and create table
     if api_config.userid.is_some() {
         let result = api_config
             .call("core_enrol_get_users_courses", process_courses)
             .await?;
 
-        // Insert course data into db
         if let ProcessResult::Courses(courses) = result {
-            create_courses_table(&conn)?;
-            create_grades_table(&conn)?;
+            create_courses_table(conn)?;
+            create_grades_table(conn)?;
 
             for course in &courses {
                 if courses_to_add
                     .iter()
                     .any(|&num| course.shortname.contains(num))
                 {
-                    insert_course(&conn, course)?;
+                    insert_course(conn, course)?;
 
-                    // Get grades/feedback for the course
                     api_config.courseid = Some(course.id);
                     let grades_result = api_config
                         .call("gradereport_user_get_grades_table", process_grades)
@@ -86,22 +156,27 @@ async fn main() -> Result<(), CustomError> {
 
                     if let ProcessResult::Grades(grades) = grades_result {
                         for grade in &grades {
-                            insert_grade(&conn, grade)?;
+                            insert_grade(conn, grade)?;
                         }
                     }
                 }
             }
         }
     }
+    Ok(())
+}
 
-    // Get grades/feedback for given courseid
-    if let Some(course_id) = args.courseid {
-        match get_grades(&conn, Some(course_id)) {
+fn display_grades_for_course(
+    conn: &rusqlite::Connection,
+    courseid: Option<i32>,
+) -> Result<(), CustomError> {
+    if let Some(course_id) = courseid {
+        match get_grades(conn, Some(course_id)) {
             Ok(grades) => {
                 for (itemname, grade, feedback) in grades {
                     if let Some(name) = &itemname {
                         if let Some(g) = grade {
-                            println!("{}\t|\tGrade: {}", name, g);
+                            println!("{}\t|  {}", g, name);
                         }
                     }
 
@@ -116,6 +191,5 @@ async fn main() -> Result<(), CustomError> {
             }
         }
     }
-
     Ok(())
 }

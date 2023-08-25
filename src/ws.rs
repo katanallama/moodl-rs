@@ -4,11 +4,11 @@ use crate::models::response::{ApiParams, CustomError};
 use crate::process_result::ProcessResult;
 
 pub struct ApiConfig {
-    pub wstoken: Option<String>,
-    pub courseid: Option<i32>,
-    pub userid: Option<i32>,
     pub client: reqwest::Client,
-    pub url: &'static str,
+    pub courseid: Option<i32>,
+    pub url: String,
+    pub userid: Option<i32>,
+    pub wstoken: String,
 }
 
 impl ApiConfig {
@@ -32,7 +32,7 @@ impl ApiConfig {
 
         let response_text = self
             .client
-            .post(self.url)
+            .post(self.url.clone())
             .form(&params)
             .send()
             .await?

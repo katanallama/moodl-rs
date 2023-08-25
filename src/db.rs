@@ -8,7 +8,7 @@ pub fn initialize_db() -> Result<Connection> {
     let conn = Connection::open("moodl-rs.db")?;
 
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS users (
+        "CREATE TABLE IF NOT EXISTS user (
              id INTEGER PRIMARY KEY,
              wstoken TEXT NOT NULL,
              url TEXT NOT NULL
@@ -16,7 +16,7 @@ pub fn initialize_db() -> Result<Connection> {
         (),
     )?;
 
-    println!("[INFO] User table has been created");
+    println!("[INFO] Database and user table created");
 
     Ok(conn)
 }
@@ -58,12 +58,12 @@ pub fn create_grades_table(conn: &Connection) -> Result<()> {
 
 pub fn insert_user(conn: &Connection, id: i32, wstoken: String, url: String) -> Result<()> {
     conn.execute(
-        "INSERT OR REPLACE INTO users (id, wstoken, url) VALUES (?1, ?2, ?3)",
+        "INSERT OR REPLACE INTO user (id, wstoken, url) VALUES (?1, ?2, ?3)",
         (id, &wstoken, &url),
     )?;
 
     println!(
-        "[INFO] User {} has been created.\n  Webtoken: {} \n  URL: {}",
+        "[INFO] User has been created:\n  ID:\t {} \n  Key:\t {} \n  URL:\t {}",
         id, &wstoken, &url
     );
 
@@ -214,8 +214,8 @@ pub fn get_grades(
     Ok(grades)
 }
 
-pub fn _get_user(conn: &Connection, id: Option<i32>) -> Result<Option<(i32, String, String)>> {
-    let mut stmt = conn.prepare("SELECT id, wstoken, url FROM users WHERE id = ?1")?;
+pub fn get_user(conn: &Connection, id: Option<i32>) -> Result<Option<(i32, String, String)>> {
+    let mut stmt = conn.prepare("SELECT id, wstoken, url FROM user WHERE id = ?1")?;
     let mut user_iter = stmt.query_map([id], |row| {
         Ok((
             row.get(0)?, // id

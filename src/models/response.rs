@@ -41,12 +41,12 @@ pub struct ErrorResponse {
 
 #[derive(Debug, Serialize)]
 pub struct ApiParams {
-    pub wstoken: Option<String>,
-    pub wsfunction: String,
-    pub moodlewsrestformat: String,
-    pub userid: Option<i32>,
     pub courseid: Option<i32>,
+    pub moodlewsrestformat: String,
     pub returnusercount: Option<i32>,
+    pub userid: Option<i32>,
+    pub wstoken: String,
+    pub wsfunction: String,
 }
 
 
@@ -55,6 +55,7 @@ pub enum CustomError {
     Reqwest(reqwest::Error),
     SerdeJson(serde_json::Error),
     Rusqlite(rusqlite::Error),
+    Io(std::io::Error),
 }
 
 impl From<reqwest::Error> for CustomError {
@@ -72,5 +73,11 @@ impl From<serde_json::Error> for CustomError {
 impl From<rusqlite::Error> for CustomError {
     fn from(err: rusqlite::Error) -> Self {
         CustomError::Rusqlite(err)
+    }
+}
+
+impl From<std::io::Error> for CustomError {
+    fn from(err: std::io::Error) -> Self {
+        CustomError::Io(err)
     }
 }
