@@ -4,16 +4,13 @@ mod models;
 mod process_result;
 mod ws;
 
+use crate::models::user::process_user;
 use clap::Parser;
 use db::{
-    create_course_content_tables, create_courses_table, create_grades_table, create_user_table,
-    initialize_db, insert_assignments, insert_content, insert_course, insert_grade, insert_user,
+    create_course_content_tables, create_user_table, initialize_db, insert_assignments,
+    insert_content, insert_grades, insert_user,
 };
-use models::course::process_courses;
-use models::course_content::process_assignments;
-use models::course_content::process_content;
-use models::course_grades::process_grades;
-use models::recents::process_recents;
+use models::course_content::{process_assignments, process_content, process_grades};
 use models::response::CustomError;
 use process_result::ProcessResult;
 use reqwest;
@@ -38,27 +35,46 @@ async fn main() -> Result<(), CustomError> {
     let mut conn = initialize_db()?;
 
     let mut api_config = if let Some(Command::Init) = args.cmd {
-        init(&conn)?
+        init(&mut conn)?
     } else {
         ApiConfig::get_saved_api_config(&conn)?
     };
 
-    process_user(&conn, &mut api_config).await?;
-    process_courses_to_add(&conn, &mut api_config).await?;
-    store_course_content(&mut conn, &mut api_config, 28962).await?;
-    store_course_content(&mut conn, &mut api_config, 26490).await?;
+    if let Some(Command::Init) = args.cmd {
+        store_user(&mut conn, &mut api_config).await?;
+    } else {
+        create_course_content_tables(&conn)?;
+        store_grades(&mut conn, &mut api_config, 26490).await?;
+        store_assignments(&mut conn, &mut api_config, 26490).await?;
+        store_content(&mut conn, &mut api_config, 26490).await?;
+    };
 
     Ok(())
 }
 
-async fn store_course_content(
+async fn store_grades(
     conn: &mut rusqlite::Connection,
     api_config: &mut ApiConfig,
     course_id: i32,
 ) -> Result<(), CustomError> {
-    create_course_content_tables(conn)?;
     api_config.courseid = Some(course_id);
+    if let ProcessResult::Grades(grades) = api_config
+        .call_json(conn, "gradereport_user_get_grade_items", process_grades)
+        .await?
+    {
+        insert_grades(conn, &grades)?;
+    }
+
+    Ok(())
+}
+
+async fn store_content(
+    conn: &mut rusqlite::Connection,
+    api_config: &mut ApiConfig,
+    course_id: i32,
+) -> Result<(), CustomError> {
     api_config.userid = None;
+    api_config.courseid = Some(course_id);
     if let ProcessResult::Content(cont) = api_config
         .call_json(conn, "core_course_get_contents", process_content)
         .await?
@@ -66,8 +82,16 @@ async fn store_course_content(
         insert_content(conn, api_config.courseid, &cont)?;
     }
 
-    api_config.courseid = None;
+    Ok(())
+}
 
+async fn store_assignments(
+    conn: &mut rusqlite::Connection,
+    api_config: &mut ApiConfig,
+    _course_id: i32,
+) -> Result<(), CustomError> {
+    api_config.courseid = None;
+    api_config.userid = None;
     if let ProcessResult::Assigns(assigns) = api_config
         .call_json(conn, "mod_assign_get_assignments", process_assignments)
         .await?
@@ -78,9 +102,24 @@ async fn store_course_content(
     Ok(())
 }
 
-fn init(conn: &rusqlite::Connection) -> Result<ApiConfig, CustomError> {
-    create_user_table(conn)?;
+async fn store_user(
+    conn: &mut rusqlite::Connection,
+    api_config: &mut ApiConfig,
+) -> Result<(), CustomError> {
+    api_config.userid = None;
+    println!("from store user Using userid: {:?}", api_config.userid);
+    if let ProcessResult::User(user) = api_config
+        .call_json(conn, "core_webservice_get_site_info", process_user)
+        .await?
+    {
+        insert_user(conn, &user, api_config)?;
+    }
 
+    Ok(())
+}
+
+fn init(conn: &mut rusqlite::Connection) -> Result<ApiConfig, CustomError> {
+    create_user_table(conn)?;
     print!("Moodle Mobile additional features service key : ");
     io::stdout().flush()?;
     let mut wstoken = String::new();
@@ -113,67 +152,6 @@ fn init(conn: &rusqlite::Connection) -> Result<ApiConfig, CustomError> {
     };
 
     Ok(api_config)
-}
-
-async fn process_user(
-    conn: &rusqlite::Connection,
-    api_config: &mut ApiConfig,
-) -> Result<(), CustomError> {
-    if let ProcessResult::UserId(id) = api_config
-        .call(
-            "block_recentlyaccesseditems_get_recent_items",
-            process_recents,
-        )
-        .await?
-    {
-        api_config.userid = Some(id);
-        insert_user(
-            conn,
-            id,
-            api_config.wstoken.clone(),
-            api_config.url.to_string(),
-        )?;
-    }
-    Ok(())
-}
-
-async fn process_courses_to_add(
-    conn: &rusqlite::Connection,
-    api_config: &mut ApiConfig,
-) -> Result<(), CustomError> {
-    let courses_to_add = vec!["353", "351", "452", "472", "303"];
-    if api_config.userid.is_some() {
-        let result = api_config
-            .call("core_enrol_get_users_courses", process_courses)
-            .await?;
-
-        if let ProcessResult::Courses(courses) = result {
-            create_courses_table(conn)?;
-            create_grades_table(conn)?;
-
-            for course in &courses {
-                if courses_to_add
-                    .iter()
-                    .any(|&num| course.shortname.contains(num))
-                {
-                    insert_course(conn, course)?;
-
-                    api_config.courseid = Some(course.id);
-                    let grades_result = api_config
-                        // .call("gradereport_user_get_grades_items", process_grades) // TODO use this instead
-                        .call("gradereport_user_get_grades_table", process_grades)
-                        .await?;
-
-                    if let ProcessResult::Grades(grades) = grades_result {
-                        for grade in &grades {
-                            insert_grade(conn, grade)?;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 // fn display_grades_for_course(

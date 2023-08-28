@@ -31,14 +31,6 @@ pub struct Value {
     _null: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct ErrorResponse {
-    _exception: String,
-    _errorcode: String,
-    _message: String,
-    _debuginfo: Option<String>,
-}
-
 #[derive(Debug, Serialize)]
 pub struct ApiParams {
     pub courseid: Option<i32>,

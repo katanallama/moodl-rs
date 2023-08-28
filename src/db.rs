@@ -1,26 +1,25 @@
 // db.rs
 //
-use crate::models::course::Course;
-use crate::models::course_content::Assignment;
-use crate::models::course_content::CourseSection;
-// use crate::models::course_content::CourseModule;
-use crate::models::course_grades::Table;
+use crate::models::course_content::{Assignment, CourseSection, Grade};
 use crate::models::response::CustomError;
+use crate::models::user::User;
+use crate::ws::ApiConfig;
 use rusqlite::{params, Connection, Result};
 
 pub fn initialize_db() -> Result<Connection> {
     let conn = Connection::open("moodl-rs.db")?;
-    conn.execute("PRAGMA foreign_keys = ON;", [])?;
-
     Ok(conn)
 }
 
-pub fn create_user_table(conn: &Connection) -> Result<()> {
+pub fn create_user_table(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS user (
-             id INTEGER PRIMARY KEY,
-             wstoken TEXT NOT NULL,
-             url TEXT NOT NULL
+        "CREATE TABLE IF NOT EXISTS User (
+            id INTEGER PRIMARY KEY,
+            content TEXT NOT NULL,
+            privkey TEXT NOT NULL,
+            url TEXT NOT NULL,
+            wstoken TEXT NOT NULL,
+            lastfetched INTEGER
         )",
         (),
     )?;
@@ -29,61 +28,27 @@ pub fn create_user_table(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-pub fn create_courses_table(conn: &Connection) -> Result<()> {
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS courses (
-             id INTEGER PRIMARY KEY,
-             fullname TEXT NOT NULL,
-             summary TEXT NOT NULL,
-             lastaccess INTEGER,
-             timemodified INTEGER NOT NULL,
-             lastfetched INTEGER,
-             UNIQUE(id)
-         );",
-        (),
-    )?;
-
-    println!("[INFO] Course table has been created");
-    Ok(())
-}
-
-pub fn create_grades_table(conn: &Connection) -> Result<()> {
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS grades (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            courseid INTEGER NOT NULL,
-            itemname TEXT NOT NULL,
-            grade TEXT NOT NULL,
-            feedback TEXT,
-            lastfetched INTEGER,
-            UNIQUE(itemname)
-        );",
-        (),
-    )?;
-
-    Ok(())
-}
-
-pub fn insert_assignments(
+pub fn insert_user(
     conn: &mut rusqlite::Connection,
-    assignments: &[Assignment],
+    user: &User,
+    api_config: &ApiConfig,
 ) -> Result<(), CustomError> {
     let tx = conn.transaction()?;
 
     {
         let mut stmt = tx.prepare(
-            "INSERT OR REPLACE INTO Assignments (id, courseid, cmid, content, lastfetched) VALUES (?1, ?2, ?3, ?4, ?5)"
+            "INSERT OR REPLACE INTO User (id, content, privkey, url, wstoken, lastfetched)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )?;
 
-        for assign in assignments {
-            stmt.execute(params![
-                assign.id,
-                assign.courseid,
-                assign.cmid,
-                assign.content,
-                assign.lastfetched
-            ])?;
-        }
+        stmt.execute(params![
+            user.id,
+            user.content,
+            user.privkey,
+            api_config.url,
+            api_config.wstoken,
+            user.lastfetched,
+        ])?;
     }
 
     tx.commit()?;
@@ -100,7 +65,8 @@ pub fn create_course_content_tables(conn: &rusqlite::Connection) -> Result<(), r
             modules TEXT,
             name TEXT,
             summary TEXT,
-            lastfetched INTEGER
+            lastfetched INTEGER,
+            UNIQUE(sectionid)
         );",
         (),
     )?;
@@ -113,18 +79,33 @@ pub fn create_course_content_tables(conn: &rusqlite::Connection) -> Result<(), r
             modulename TEXT,
             content TEXT,
             lastfetched INTEGER,
-            FOREIGN KEY (courseid) REFERENCES Sections(courseid)
+            UNIQUE(moduleid)
         );",
         (),
     )?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS Assignments (
-            id INTEGER PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assignid INTEGER,
             courseid INTEGER,
             cmid INTEGER,
             content TEXT NOT NULL,
-            lastfetched INTEGER
+            lastfetched INTEGER,
+            UNIQUE(assignid)
+        );",
+        (),
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS Grades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gradeid INTEGER,
+            courseid INTEGER,
+            cmid INTEGER,
+            content TEXT NOT NULL,
+            lastfetched INTEGER,
+            UNIQUE(gradeid)
         );",
         (),
     )?;
@@ -140,28 +121,33 @@ pub fn insert_content(
     let tx = conn.transaction()?;
 
     {
-            // "INSERT OR REPLACE INTO Sections (courseid, modules, summary, lastfetched) VALUES (?1, ?2, ?3, ?4)"
         let mut stmt = tx.prepare(
-            "INSERT OR REPLACE INTO Sections (courseid, name, summary, lastfetched) VALUES (?1, ?2, ?3, ?4)"
+            "INSERT OR REPLACE INTO Sections (sectionid, courseid, name, summary, lastfetched)
+                VALUES (?1, ?2, ?3, ?4, ?5)",
         )?;
 
         for section in sections {
             stmt.execute(params![
+                section.sectionid,
                 courseid,
                 section.name,
                 section.summary,
                 section.lastfetched
             ])?;
 
-            // Insert related modules for each content
             let mut module_stmt = tx.prepare(
-                "INSERT OR REPLACE INTO Modules (courseid, moduleid, modulename, content, lastfetched) VALUES (?1, ?2, ?3, ?4, ?5)"
+                "INSERT OR REPLACE INTO Modules (moduleid, courseid, modulename, content, lastfetched)
+                    VALUES (?1, ?2, ?3, ?4, ?5)
+                    ON CONFLICT(moduleid) DO UPDATE SET
+                        lastfetched=excluded.lastfetched,
+                        modulename=excluded.modulename,
+                        content=excluded.content"
             )?;
 
             for module in &section.modules {
                 module_stmt.execute(params![
-                    courseid,
                     module.moduleid,
+                    courseid,
                     module.modulename,
                     module.content,
                     module.lastfetched
@@ -175,139 +161,62 @@ pub fn insert_content(
     Ok(())
 }
 
-pub fn insert_user(conn: &Connection, id: i32, wstoken: String, url: String) -> Result<()> {
-    conn.execute(
-        "INSERT OR REPLACE INTO user (id, wstoken, url) VALUES (?1, ?2, ?3)",
-        (id, &wstoken, &url),
-    )?;
+pub fn insert_assignments(
+    conn: &mut rusqlite::Connection,
+    assignments: &[Assignment],
+) -> Result<(), CustomError> {
+    let tx = conn.transaction()?;
 
-    println!(
-        "[INFO] User has been created:\n  ID:\t {} \n  Key:\t {} \n  URL:\t {}",
-        id, &wstoken, &url
-    );
+    {
+        let mut stmt = tx.prepare(
+            "INSERT OR REPLACE INTO Assignments (assignid, courseid, cmid, content, lastfetched)
+                VALUES (?1, ?2, ?3, ?4, ?5)
+                ON CONFLICT(assignid) DO UPDATE SET
+                    lastfetched=excluded.lastfetched,
+                    content=excluded.content",
+        )?;
 
-    Ok(())
-}
-
-pub fn insert_course(conn: &Connection, course: &Course) -> Result<()> {
-    conn.execute(
-        "INSERT OR REPLACE INTO courses (
-            id,
-            fullname,
-            summary,
-            lastaccess,
-            timemodified
-        )
-        VALUES (?1, ?2, ?3, ?4, ?5)",
-        (
-            course.id,
-            &course.fullname,
-            &course.summary,
-            course.lastaccess,
-            course.timemodified,
-        ),
-    )?;
-
-    conn.execute(
-        "CREATE TRIGGER IF NOT EXISTS course_lastfetched_after_update
-            AFTER INSERT ON courses
-            FOR EACH ROW
-            BEGIN
-                UPDATE courses SET lastfetched = strftime('%s', 'now') WHERE id = NEW.id;
-            END;",
-        [],
-    )?;
-
-    println!(
-        "[INFO] {} has been created: {}",
-        course.shortname, &course.id
-    );
-
-    Ok(())
-}
-
-pub fn insert_grade(conn: &Connection, table: &Table) -> Result<()> {
-    for data in &table.tabledata {
-        if data.itemname.is_some() && data.grade.is_some()
-        // && !data.itemname.as_ref().and_then(|d| d.content.as_ref()).contains("Aggregation")
-        {
-            conn.execute(
-                "INSERT OR REPLACE INTO grades (
-                    courseid,
-                    itemname,
-                    grade,
-                    feedback
-                )
-                VALUES (?1, ?2, ?3, ?4)",
-                (
-                    table.courseid,
-                    data.itemname.as_ref().and_then(|d| d.content.as_ref()),
-                    data.grade.as_ref().and_then(|d| d.content.as_ref()),
-                    data.feedback.as_ref().and_then(|d| d.content.as_ref()),
-                ),
-            )?;
+        for assign in assignments {
+            stmt.execute(params![
+                assign.assignid,
+                assign.courseid,
+                assign.cmid,
+                assign.content,
+                assign.lastfetched
+            ])?;
         }
     }
 
-    conn.execute(
-        "CREATE TRIGGER IF NOT EXISTS grades_lastfetched_after_update
-            AFTER INSERT ON grades
-            FOR EACH ROW
-            BEGIN
-                UPDATE grades SET lastfetched = strftime('%s', 'now') WHERE id = NEW.id;
-            END;",
-        [],
-    )?;
-
-    println!(
-        "[INFO] Grades for user {} in course {} have been inserted.",
-        table.userid, table.courseid
-    );
+    tx.commit()?;
 
     Ok(())
 }
 
-pub fn _get_all_courses(conn: &Connection) -> Result<Vec<Course>> {
-    let mut courses = Vec::new();
+pub fn insert_grades(conn: &mut rusqlite::Connection, grades: &[Grade]) -> Result<(), CustomError> {
+    let tx = conn.transaction()?;
 
-    let mut stmt = conn.prepare("SELECT * FROM courses")?;
-
-    let course_rows = stmt.query_map([], |row| {
-        Ok(Course {
-            id: row.get(0)?,
-            shortname: row.get(1)?,
-            fullname: row.get(2)?,
-            displayname: row.get(3)?,
-            idnumber: row.get(4)?,
-            summary: row.get(5)?,
-            startdate: row.get(6)?,
-            enddate: row.get(7)?,
-            lastaccess: row.get(8)?,
-            showactivitydates: row.get(9)?,
-            timemodified: row.get(10)?,
-            format: None,
-            category: None,
-            completed: None,
-            completionhascriteria: None,
-            completionusertracked: None,
-            showcompletionconditions: None,
-            showgrades: None,
-            marker: None,
-            hidden: None,
-            isfavourite: None,
-            enablecompletion: None,
-            lang: None,
-            progress: None,
-            summaryformat: None,
-            visible: None,
-        })
-    })?;
-
-    for course_row in course_rows {
-        courses.push(course_row?);
+    {
+        let mut stmt = tx.prepare(
+            "INSERT OR REPLACE INTO Grades (gradeid, courseid, cmid, content, lastfetched)
+                VALUES (?1, ?2, ?3, ?4, ?5)
+                ON CONFLICT(gradeid) DO UPDATE SET
+                    lastfetched=excluded.lastfetched,
+                    content=excluded.content",
+        )?;
+        for grd in grades {
+            stmt.execute(params![
+                grd.gradeid,
+                grd.courseid,
+                grd.cmid,
+                grd.content,
+                grd.lastfetched
+            ])?;
+        }
     }
 
-    Ok(courses)
+    tx.commit()?;
+
+    Ok(())
 }
 
 pub fn _get_grades(
@@ -338,10 +247,10 @@ pub fn get_user(conn: &Connection, id: Option<i32>) -> Result<Option<(i32, Strin
     let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     if let Some(user_id) = id {
-        sql = "SELECT id, wstoken, url FROM user WHERE id = ?1";
+        sql = "SELECT id, wstoken, url FROM User WHERE id = ?1";
         params.push(Box::new(user_id));
     } else {
-        sql = "SELECT id, wstoken, url FROM user LIMIT 1";
+        sql = "SELECT id, wstoken, url FROM User LIMIT 1";
     }
 
     let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(AsRef::as_ref).collect();
@@ -349,7 +258,7 @@ pub fn get_user(conn: &Connection, id: Option<i32>) -> Result<Option<(i32, Strin
     let mut stmt = conn.prepare(sql)?;
     let mut user_iter = stmt.query_map(&*params_refs, |row| {
         Ok((
-            row.get(0)?, // id
+            row.get(0)?, // userid
             row.get(1)?, // wstoken
             row.get(2)?, // url
         ))

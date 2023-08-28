@@ -1,15 +1,14 @@
 // process_results.rs
 //
-use crate::models::course::Course;
-use crate::models::course_grades::Table;
-use crate::models::course_content::CourseSection;
-use crate::models::course_content::Assignment;
+// use crate::models::course::Course;
+use crate::models::course_content::{Assignment, CourseSection, Grade};
+use crate::models::user::User;
 
 #[derive(Debug)]
 pub enum ProcessResult {
-    UserId(i32),
-    Courses(Vec<Course>),
-    Grades(Vec<Table>),
+    User(User),
+    // Courses(Vec<Course>),
+    Grades(Vec<Grade>),
     Content(Vec<CourseSection>),
     Assigns(Vec<Assignment>),
     None,

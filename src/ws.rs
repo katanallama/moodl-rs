@@ -19,59 +19,10 @@ pub struct ApiError {
     exception: String,
     errorcode: String,
     message: String,
+    _debuginfo: Option<String>,
 }
 
 impl ApiConfig {
-    pub async fn call(
-        &self,
-        wsfunction: &str,
-        process_fn: fn(&str) -> Result<ProcessResult, serde_json::Error>,
-    ) -> Result<ProcessResult, CustomError> {
-        let params = ApiParams {
-            wstoken: self.wstoken.clone(),
-            wsfunction: wsfunction.to_string(),
-            moodlewsrestformat: "json".to_string(),
-            courseid: self.courseid,
-            userid: self.userid,
-            returnusercount: if wsfunction == "core_enrol_get_users_courses" {
-                Some(0)
-            } else {
-                None
-            },
-        };
-
-        let response_text = self
-            .client
-            .post(self.url.clone())
-            .form(&params)
-            .send()
-            .await?
-            .text()
-            .await?;
-
-        if let Ok(api_error) = serde_json::from_str::<ApiError>(&response_text) {
-            match &api_error.exception[..] {
-                "moodle_exception" => {
-                    // Handle moodle_exception specifically
-                    if api_error.errorcode == "sitemaintenance" {
-                        return Err(CustomError::Api(format!(
-                            "Exception: {}. Message: {}",
-                            api_error.exception, api_error.message
-                        )));
-                    }
-                }
-                "some_other_exception" => {
-                    // Handle some_other_exception specifically
-                }
-                _ => {
-                    // General error handling
-                }
-            }
-        }
-
-        Ok(process_fn(&response_text)?)
-    }
-
     pub async fn call_json(
         &self,
         conn: &rusqlite::Connection,
@@ -99,7 +50,6 @@ impl ApiConfig {
         if let Ok(api_error) = serde_json::from_str::<ApiError>(&response_text) {
             match &api_error.exception[..] {
                 "moodle_exception" => {
-                    // Handle moodle_exception specifically
                     if api_error.errorcode == "sitemaintenance" {
                         return Err(CustomError::Api(format!(
                             "Exception: {}. Message: {}",
@@ -107,11 +57,24 @@ impl ApiConfig {
                         )));
                     }
                 }
-                "some_other_exception" => {
-                    // Handle some_other_exception specifically
+                "required_capability_exception" => {
+                    if api_error.errorcode == "nopermissions" {
+                        return Err(CustomError::Api(format!(
+                            "Exception: {}. Message: {}",
+                            api_error.exception, api_error.message
+                        )));
+                    }
+                }
+                "invalid_parameter_exception" => {
+                    if api_error.errorcode == "invalidparameter" {
+                        return Err(CustomError::Api(format!(
+                            "Exception: {}. Message: {}",
+                            api_error.exception, api_error.message,
+                        )));
+                    }
                 }
                 _ => {
-                    // General error handling
+                    // TODO General error handling
                 }
             }
         }
@@ -121,10 +84,10 @@ impl ApiConfig {
 
     pub fn get_saved_api_config(conn: &rusqlite::Connection) -> Result<Self, CustomError> {
         match get_user(&conn, None) {
-            Ok(Some((_, wstoken, url))) => Ok(ApiConfig {
+            Ok(Some((userid, wstoken, url))) => Ok(ApiConfig {
                 wstoken,
                 courseid: None,
-                userid: None,
+                userid: Some(userid),
                 client: reqwest::Client::new(),
                 url,
             }),
