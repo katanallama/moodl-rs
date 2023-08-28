@@ -49,13 +49,13 @@ pub struct ApiParams {
     pub wsfunction: String,
 }
 
-
 #[derive(Debug)]
 pub enum CustomError {
     Reqwest(reqwest::Error),
     SerdeJson(serde_json::Error),
     Rusqlite(rusqlite::Error),
     Io(std::io::Error),
+    Api(String),
 }
 
 impl From<reqwest::Error> for CustomError {

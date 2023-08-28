@@ -1,11 +1,16 @@
 // db.rs
 //
 use crate::models::course::Course;
+use crate::models::course_content::Assignment;
+use crate::models::course_content::CourseSection;
+// use crate::models::course_content::CourseModule;
 use crate::models::course_grades::Table;
-use rusqlite::{Connection, Result};
+use crate::models::response::CustomError;
+use rusqlite::{params, Connection, Result};
 
 pub fn initialize_db() -> Result<Connection> {
     let conn = Connection::open("moodl-rs.db")?;
+    conn.execute("PRAGMA foreign_keys = ON;", [])?;
 
     Ok(conn)
 }
@@ -55,6 +60,117 @@ pub fn create_grades_table(conn: &Connection) -> Result<()> {
         );",
         (),
     )?;
+
+    Ok(())
+}
+
+pub fn insert_assignments(
+    conn: &mut rusqlite::Connection,
+    assignments: &[Assignment],
+) -> Result<(), CustomError> {
+    let tx = conn.transaction()?;
+
+    {
+        let mut stmt = tx.prepare(
+            "INSERT OR REPLACE INTO Assignments (id, courseid, cmid, content, lastfetched) VALUES (?1, ?2, ?3, ?4, ?5)"
+        )?;
+
+        for assign in assignments {
+            stmt.execute(params![
+                assign.id,
+                assign.courseid,
+                assign.cmid,
+                assign.content,
+                assign.lastfetched
+            ])?;
+        }
+    }
+
+    tx.commit()?;
+
+    Ok(())
+}
+
+pub fn create_course_content_tables(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS Sections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sectionid INTEGER,
+            courseid INTEGER,
+            modules TEXT,
+            name TEXT,
+            summary TEXT,
+            lastfetched INTEGER
+        );",
+        (),
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS Modules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            courseid INTEGER,
+            moduleid INTEGER,
+            modulename TEXT,
+            content TEXT,
+            lastfetched INTEGER,
+            FOREIGN KEY (courseid) REFERENCES Sections(courseid)
+        );",
+        (),
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS Assignments (
+            id INTEGER PRIMARY KEY,
+            courseid INTEGER,
+            cmid INTEGER,
+            content TEXT NOT NULL,
+            lastfetched INTEGER
+        );",
+        (),
+    )?;
+
+    Ok(())
+}
+
+pub fn insert_content(
+    conn: &mut rusqlite::Connection,
+    courseid: Option<i32>,
+    sections: &[CourseSection],
+) -> Result<(), CustomError> {
+    let tx = conn.transaction()?;
+
+    {
+            // "INSERT OR REPLACE INTO Sections (courseid, modules, summary, lastfetched) VALUES (?1, ?2, ?3, ?4)"
+        let mut stmt = tx.prepare(
+            "INSERT OR REPLACE INTO Sections (courseid, name, summary, lastfetched) VALUES (?1, ?2, ?3, ?4)"
+        )?;
+
+        for section in sections {
+            stmt.execute(params![
+                courseid,
+                section.name,
+                section.summary,
+                section.lastfetched
+            ])?;
+
+            // Insert related modules for each content
+            let mut module_stmt = tx.prepare(
+                "INSERT OR REPLACE INTO Modules (courseid, moduleid, modulename, content, lastfetched) VALUES (?1, ?2, ?3, ?4, ?5)"
+            )?;
+
+            for module in &section.modules {
+                module_stmt.execute(params![
+                    courseid,
+                    module.moduleid,
+                    module.modulename,
+                    module.content,
+                    module.lastfetched
+                ])?;
+            }
+        }
+    }
+
+    tx.commit()?;
 
     Ok(())
 }
@@ -194,7 +310,7 @@ pub fn _get_all_courses(conn: &Connection) -> Result<Vec<Course>> {
     Ok(courses)
 }
 
-pub fn get_grades(
+pub fn _get_grades(
     conn: &Connection,
     courseid: Option<i32>,
 ) -> Result<Vec<(Option<String>, Option<String>, Option<String>)>> {
