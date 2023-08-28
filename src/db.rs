@@ -219,29 +219,6 @@ pub fn insert_grades(conn: &mut rusqlite::Connection, grades: &[Grade]) -> Resul
     Ok(())
 }
 
-pub fn _get_grades(
-    conn: &Connection,
-    courseid: Option<i32>,
-) -> Result<Vec<(Option<String>, Option<String>, Option<String>)>> {
-    let mut grades = Vec::new();
-
-    let mut stmt =
-        conn.prepare("SELECT itemname, grade, feedback FROM grades WHERE courseid = ?1")?;
-    let grade_rows = stmt.query_map([courseid], |row| {
-        Ok((
-            row.get::<_, Option<String>>(0)?, // itemname
-            row.get::<_, Option<String>>(1)?, // grade
-            row.get::<_, Option<String>>(2)?, // feedback
-        ))
-    })?;
-
-    for grade_row in grade_rows {
-        grades.push(grade_row?);
-    }
-
-    Ok(grades)
-}
-
 pub fn get_user(conn: &Connection, id: Option<i32>) -> Result<Option<(i32, String, String)>> {
     let sql;
     let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();

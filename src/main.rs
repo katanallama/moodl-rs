@@ -107,7 +107,6 @@ async fn store_user(
     api_config: &mut ApiConfig,
 ) -> Result<(), CustomError> {
     api_config.userid = None;
-    println!("from store user Using userid: {:?}", api_config.userid);
     if let ProcessResult::User(user) = api_config
         .call_json(conn, "core_webservice_get_site_info", process_user)
         .await?
@@ -154,30 +153,3 @@ fn init(conn: &mut rusqlite::Connection) -> Result<ApiConfig, CustomError> {
     Ok(api_config)
 }
 
-// fn display_grades_for_course(
-//     conn: &rusqlite::Connection,
-//     courseid: Option<i32>,
-// ) -> Result<(), CustomError> {
-//     if let Some(course_id) = courseid {
-//         match get_grades(conn, Some(course_id)) {
-//             Ok(grades) => {
-//                 for (itemname, grade, feedback) in grades {
-//                     if let Some(name) = &itemname {
-//                         if let Some(g) = grade {
-//                             println!("{}\t|  {}", g, name);
-//                         }
-//                     }
-
-//                     if let Some(fb) = &feedback {
-//                         println!("Feedback: {}", fb);
-//                         println!("------------------------------------------------------");
-//                     }
-//                 }
-//             }
-//             Err(e) => {
-//                 println!("Error fetching grades: {}", e);
-//             }
-//         }
-//     }
-//     Ok(())
-// }
