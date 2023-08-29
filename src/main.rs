@@ -14,7 +14,6 @@ use models::course_content::{process_assignments, process_content, process_grade
 use models::response::CustomError;
 use process_result::ProcessResult;
 use reqwest;
-
 use std::io::{self, Write};
 use ws::ApiConfig;
 
@@ -152,4 +151,3 @@ fn init(conn: &mut rusqlite::Connection) -> Result<ApiConfig, CustomError> {
 
     Ok(api_config)
 }
-
