@@ -48,6 +48,8 @@ pub enum CustomError {
     Rusqlite(rusqlite::Error),
     Io(std::io::Error),
     Api(String),
+    MissingField(String),
+    TypeMismatch(String),
 }
 
 impl From<reqwest::Error> for CustomError {
