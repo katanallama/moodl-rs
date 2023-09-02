@@ -19,7 +19,7 @@ pub struct ApiError {
     exception: String,
     errorcode: String,
     message: String,
-    _debuginfo: Option<String>,
+    debuginfo: Option<String>,
 }
 
 impl ApiConfig {
@@ -52,7 +52,7 @@ impl ApiConfig {
                 "moodle_exception" => {
                     if api_error.errorcode == "sitemaintenance" {
                         return Err(CustomError::Api(format!(
-                            "Exception: {}. Message: {}",
+                            "Exception: {} :: {}",
                             api_error.exception, api_error.message
                         )));
                     }
@@ -60,17 +60,25 @@ impl ApiConfig {
                 "required_capability_exception" => {
                     if api_error.errorcode == "nopermissions" {
                         return Err(CustomError::Api(format!(
-                            "Exception: {}. Message: {}",
+                            "Exception: {} :: {}",
                             api_error.exception, api_error.message
                         )));
                     }
                 }
                 "invalid_parameter_exception" => {
                     if api_error.errorcode == "invalidparameter" {
-                        return Err(CustomError::Api(format!(
-                            "Exception: {}. Message: {}",
-                            api_error.exception, api_error.message,
-                        )));
+                        // If there's debuginfo available, include it in the error message
+                        if let Some(debug_info) = &api_error.debuginfo {
+                            return Err(CustomError::Api(format!(
+                                "Exception: {} :: {}. {}",
+                                api_error.exception, api_error.message, debug_info
+                            )));
+                        } else {
+                            return Err(CustomError::Api(format!(
+                                "Exception: {} :: {}",
+                                api_error.exception, api_error.message
+                            )));
+                        }
                     }
                 }
                 _ => {
