@@ -32,8 +32,8 @@ pub struct CourseModule {
 pub struct Assignment {
     pub id: i32,
     pub assignid: Option<i64>,
-    pub courseid: Option<i64>,
     pub cmid: Option<i64>, // course module id
+    pub courseid: Option<i64>,
     pub content: String,
     pub lastfetched: i64,
 }
@@ -48,10 +48,37 @@ pub struct Grade {
     pub lastfetched: i64,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct Page {
+    pub id: i32,
+    pub cmid: Option<i64>, // course module id
+    pub courseid: Option<i64>,
+    pub content: String,
+    pub lastfetched: i64,
+}
+
 enum ContentType {
-    Grade,
-    Content,
     Assignment,
+    Content,
+    Grade,
+    Page,
+}
+
+pub fn process_pages(_conn: &Connection, content: &str) -> Result<ProcessResult, CustomError> {
+    let (parsed, now) = prepare(content)?;
+    let process_page = |page: &Value| -> Page {
+        Page {
+            id: 0,
+            cmid: page["coursemodule"].as_i64(),
+            courseid: page["course"].as_i64(),
+            content: filter_data(page, ContentType::Page).to_string(),
+            lastfetched: now,
+        }
+    };
+
+    let page_list: Vec<Page> = process_array_items(&parsed, "pages", process_page);
+
+    Ok(ProcessResult::Pages(page_list))
 }
 
 pub fn process_assignments(
@@ -199,7 +226,6 @@ pub fn process_content(_conn: &Connection, content: &str) -> Result<ProcessResul
     Ok(ProcessResult::Content(c_sections))
 }
 
-
 fn prepare(content: &str) -> Result<(Value, i64), CustomError> {
     let parsed = serde_json::from_str(content)?;
     let now = Utc::now().timestamp();
@@ -220,6 +246,7 @@ where
 
     items
 }
+
 
 fn filter_data(content: &Value, content_type: ContentType) -> Value {
     match content_type {
@@ -266,6 +293,32 @@ fn filter_data(content: &Value, content_type: ContentType) -> Value {
                 "timemodified": content["timemodified"],
                 "intro": content["intro"],
                 "introattachments": introattachments
+            })
+        }
+        ContentType::Page => {
+            let contentfiles: Vec<Value> = content["contentfiles"]
+                .as_array()
+                .unwrap_or(&Vec::new())
+                .iter()
+                .map(|file| {
+                    json!({
+                        "filename": file["filename"],
+                        "fileurl": file["fileurl"],
+                        "timemodified": file["timemodified"],
+                    })
+                })
+                .collect();
+
+            json!({
+                "name": content["name"],
+                "coursemodule": content["coursemodule"],
+                "course": content["course"],
+                "intro": content["intro"],
+                "introfiles": content["introfiles"],
+                "content": content["content"],
+                "timemodified": content["timemodified"],
+                "revision": content["revision"],
+                "contentfiles": contentfiles
             })
         }
     }
