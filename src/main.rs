@@ -1,119 +1,80 @@
 // main.rs
+//
 mod db;
+mod handlers;
 mod models;
 mod process_result;
+mod ui;
 mod ws;
 
-use crate::models::user::process_user;
-use clap::Parser;
-use db::{
-    create_course_content_tables, create_user_table, initialize_db, insert_assignments,
-    insert_content, insert_grades, insert_user,
+use {
+    // clap::Parser,
+    db::{create_course_content_tables, create_user_table, initialize_db},
+    handlers::{store_assignments, store_content, store_courses, store_grades, store_user, store_pages},
+    models::response::CustomError,
+    process_result::ProcessResult,
+    reqwest,
+    std::io::{self, Write},
+    termimad::{crossterm::style::Color::*, MadSkin, Question, *},
+    ui::parser::fetch_and_print_modules,
+    ws::ApiConfig,
 };
-use models::course_content::{process_assignments, process_content, process_grades};
-use models::response::CustomError;
-use process_result::ProcessResult;
-use reqwest;
-use std::io::{self, Write};
-use ws::ApiConfig;
 
-#[derive(Parser)]
-struct Cli {
-    #[clap(subcommand)]
-    cmd: Option<Command>,
-}
-
-#[derive(Parser)]
-enum Command {
+// New enum for termimad TUI choices
+enum UserCommand {
     Init,
+    Section,
+    Default,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), CustomError> {
-    let args = Cli::parse();
+    let skin = make_skin();
+    let command = prompt_command(&skin)?;
+
     let mut conn = initialize_db()?;
 
-    let mut api_config = if let Some(Command::Init) = args.cmd {
+    let mut api_config = if let UserCommand::Init = command {
         init(&mut conn)?
     } else {
         ApiConfig::get_saved_api_config(&conn)?
     };
 
-    if let Some(Command::Init) = args.cmd {
-        store_user(&mut conn, &mut api_config).await?;
-    } else {
-        create_course_content_tables(&conn)?;
-        store_grades(&mut conn, &mut api_config, 26490).await?;
-        store_assignments(&mut conn, &mut api_config, 26490).await?;
-        store_content(&mut conn, &mut api_config, 26490).await?;
-    };
+    let test_course = 29737;
 
-    Ok(())
-}
-
-async fn store_grades(
-    conn: &mut rusqlite::Connection,
-    api_config: &mut ApiConfig,
-    course_id: i32,
-) -> Result<(), CustomError> {
-    api_config.courseid = Some(course_id);
-    if let ProcessResult::Grades(grades) = api_config
-        .call_json(conn, "gradereport_user_get_grade_items", process_grades)
-        .await?
-    {
-        insert_grades(conn, &grades)?;
+    match command {
+        UserCommand::Init => {
+            store_user(&mut conn, &mut api_config).await?;
+            let mut api_config = ApiConfig::get_saved_api_config(&conn)?;
+            store_courses(&mut conn, &mut api_config).await?;
+            create_course_content_tables(&conn)?;
+        }
+        UserCommand::Section => {
+            fetch_and_print_modules(&conn, test_course)?;
+        }
+        UserCommand::Default => {
+            store_grades(&mut conn, &mut api_config, test_course).await?;
+            store_assignments(&mut conn, &mut api_config, test_course).await?;
+            store_content(&mut conn, &mut api_config, test_course).await?;
+            store_pages(&mut conn, &mut api_config).await?;
+        }
     }
 
     Ok(())
 }
 
-async fn store_content(
-    conn: &mut rusqlite::Connection,
-    api_config: &mut ApiConfig,
-    course_id: i32,
-) -> Result<(), CustomError> {
-    api_config.userid = None;
-    api_config.courseid = Some(course_id);
-    if let ProcessResult::Content(cont) = api_config
-        .call_json(conn, "core_course_get_contents", process_content)
-        .await?
-    {
-        insert_content(conn, api_config.courseid, &cont)?;
+fn prompt_command(skin: &MadSkin) -> Result<UserCommand, CustomError> {
+    let mut q = Question::new("Choose a command to run:");
+    q.add_answer("i", "**I**nit - Initialize the application");
+    q.add_answer("s", "**S**ection - Handle sections");
+    q.add_answer("d", "Default - Run the default commands");
+    let a = q.ask(skin)?;
+
+    match a.as_str() {
+        "i" => Ok(UserCommand::Init),
+        "s" => Ok(UserCommand::Section),
+        _ => Ok(UserCommand::Default),
     }
-
-    Ok(())
-}
-
-async fn store_assignments(
-    conn: &mut rusqlite::Connection,
-    api_config: &mut ApiConfig,
-    _course_id: i32,
-) -> Result<(), CustomError> {
-    api_config.courseid = None;
-    api_config.userid = None;
-    if let ProcessResult::Assigns(assigns) = api_config
-        .call_json(conn, "mod_assign_get_assignments", process_assignments)
-        .await?
-    {
-        insert_assignments(conn, &assigns)?;
-    }
-
-    Ok(())
-}
-
-async fn store_user(
-    conn: &mut rusqlite::Connection,
-    api_config: &mut ApiConfig,
-) -> Result<(), CustomError> {
-    api_config.userid = None;
-    if let ProcessResult::User(user) = api_config
-        .call_json(conn, "core_webservice_get_site_info", process_user)
-        .await?
-    {
-        insert_user(conn, &user, api_config)?;
-    }
-
-    Ok(())
 }
 
 fn init(conn: &mut rusqlite::Connection) -> Result<ApiConfig, CustomError> {
@@ -150,4 +111,15 @@ fn init(conn: &mut rusqlite::Connection) -> Result<ApiConfig, CustomError> {
     };
 
     Ok(api_config)
+}
+
+fn make_skin() -> MadSkin {
+    let mut skin = MadSkin::default();
+    skin.table.align = Alignment::Center;
+    skin.set_headers_fg(AnsiValue(178));
+    skin.bold.set_fg(Yellow);
+    skin.italic.set_fg(Magenta);
+    skin.scrollbar.thumb.set_fg(AnsiValue(178));
+    skin.code_block.align = Alignment::Center;
+    skin
 }
