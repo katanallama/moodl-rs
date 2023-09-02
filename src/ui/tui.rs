@@ -4,6 +4,7 @@ use {
     minimad::{TextTemplate, OwningTemplateExpander},
     termimad::crossterm::style::Color::*,
     termimad::*,
+    crate::ui::parser::ParsedModule,
 };
 use std::io::{stdout, Write};
 use termimad::crossterm::{
@@ -24,6 +25,7 @@ use termimad::crossterm::{
     },
 };
 
+#[allow(dead_code)]
 static MODTEMPLATE: &str = r#"
 -----------
 # ${app-name}
@@ -36,25 +38,14 @@ ${module-description}
 -----------
 "#;
 
-/// a struct to illustrate several ways to format its information
-pub struct ParsedModule {
-    pub name: String,
-    pub description: String,
-    pub url: Option<String>,
-}
-
-pub struct _ParsedGrade {
-    pub name: String,
-    pub description: String,
-    pub url: Option<String>,
-}
-
+#[allow(dead_code)]
 fn view_area() -> Area {
     let mut area = Area::full_screen();
     area.pad_for_max_width(120); // we don't want a too wide text column
     area
 }
 
+#[allow(dead_code)]
 pub fn ui(modules: &[ParsedModule]) -> Result<(), Error> {
     // fill an expander with data
     let mut expander = OwningTemplateExpander::new();
