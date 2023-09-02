@@ -1,15 +1,35 @@
 // models/user.rs
 //
-use std::collections::HashMap;
-use std::fs::OpenOptions;
-use std::io::prelude::*;
+use {
+    crate::db::*,
+    crate::models::response::CustomError,
+    crate::process_result::ProcessResult,
+    crate::ws::ApiConfig,
+    chrono::Utc,
+    rusqlite::{Connection, Result},
+    serde::{Deserialize, Serialize},
+    serde_json::Value,
+    std::fs,
+};
 
-use crate::models::response::CustomError;
-use crate::process_result::ProcessResult;
-use chrono::Utc;
-use rusqlite::{Connection, Result};
-use serde_derive::Deserialize;
-use serde_json::Value;
+#[derive(Debug, Deserialize, Serialize)]
+struct Secrets {
+    api: ApiSecrets,
+    courses: Vec<CourseSecrets>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct CourseSecrets {
+    id: i64,
+    shortname: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct ApiSecrets {
+    url: String,
+    token: String,
+    private_key: String,
+}
 
 #[derive(Deserialize, Debug)]
 pub struct User {
@@ -30,24 +50,32 @@ pub struct Course {
     pub lastfetched: i64,
 }
 
-pub fn write_course_conf(courses: Vec<Course>) -> Result<ProcessResult, CustomError> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open("moodl-rs-id")?;
+fn read_secrets() -> Result<Secrets, Box<dyn std::error::Error>> {
+    let contents = fs::read_to_string("Secrets.toml")?;
+    let secrets: Secrets = toml::from_str(&contents)?;
+    Ok(secrets)
+}
 
-    let mut course_map = HashMap::new();
+pub fn write_course_conf(courses: Vec<Course>) -> Result<ProcessResult, CustomError> {
+    let contents = fs::read_to_string("Secrets.toml")?;
+    let mut secrets: Secrets = toml::from_str(&contents)?;
+
+    secrets.courses.clear(); // Clear existing courses
+
     for course in &courses {
         if let Some(course_id) = course.courseid {
-            course_map.insert(course_id, &course.shortname);
+            let decoded_shortname = serde_json::from_str::<String>(&course.shortname)
+                .unwrap_or_else(|_| course.shortname.clone());
+            secrets.courses.push(CourseSecrets {
+                id: course_id,
+                shortname: decoded_shortname,
+            });
         }
     }
 
-    file.write_all(b"Course Map: {\n")?;
-    for (course_id, course_name) in &course_map {
-        file.write_all(format!("    {}: {},\n", course_id, course_name).as_bytes())?;
-    }
-    file.write_all(b"}\n")?;
+    // Serialize and write back to file
+    let updated_secrets = toml::to_string(&secrets)?;
+    fs::write("Secrets.toml", updated_secrets)?;
 
     Ok(ProcessResult::Courses(courses))
 }
@@ -77,14 +105,15 @@ pub fn process_courses(_conn: &Connection, content: &str) -> Result<ProcessResul
 pub fn process_user(_conn: &Connection, content: &str) -> Result<ProcessResult, CustomError> {
     let parsed: Value = serde_json::from_str(content)?;
     let now = Utc::now().timestamp();
+    let secrets = read_secrets()?;
 
     if let Some(user_id) = parsed["userid"].as_i64() {
         let user = User {
             id: user_id,
             content: parsed.to_string(),
-            privkey: parsed["userprivateaccesskey"].to_string(),
-            url: "".to_string(),
-            wstoken: "".to_string(),
+            privkey: secrets.api.private_key.clone(),
+            url: secrets.api.url.clone(),
+            wstoken: secrets.api.token.clone(),
             lastfetched: now,
         };
 
@@ -92,4 +121,51 @@ pub fn process_user(_conn: &Connection, content: &str) -> Result<ProcessResult, 
     }
 
     Ok(ProcessResult::None)
+}
+
+pub async fn store_user(
+    conn: &mut rusqlite::Connection,
+    api_config: &mut ApiConfig,
+) -> Result<User, CustomError> {
+    api_config.userid = None;
+    let user = if let ProcessResult::User(user) = api_config
+        .call_json(conn, "core_webservice_get_site_info", process_user)
+        .await?
+    {
+        generic_insert(conn, &user)?;
+        Some(user)
+    } else {
+        None
+    };
+
+    user.ok_or(CustomError::Other("Failed to store user".to_string()))
+}
+
+pub async fn init(conn: &mut rusqlite::Connection) -> Result<ApiConfig, CustomError> {
+    let secrets = read_secrets()?;
+
+    let wstoken = secrets.api.token;
+    if wstoken.is_empty() {
+        return Err(CustomError::Other("Moodle key is required!".to_string()));
+    }
+
+    let url = if secrets.api.url.trim().is_empty() {
+        "https://urcourses.uregina.ca/webservice/rest/server.php".to_string()
+    } else {
+        secrets.api.url
+    };
+
+    let mut api_config = ApiConfig {
+        wstoken,
+        courseid: None,
+        userid: None,
+        client: reqwest::Client::new(),
+        url,
+    };
+
+    let user = store_user(conn, &mut api_config).await?;
+
+    api_config.userid = Some(user.id);
+
+    Ok(api_config)
 }

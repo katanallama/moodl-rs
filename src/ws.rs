@@ -10,7 +10,7 @@ pub struct ApiConfig {
     pub client: reqwest::Client,
     pub courseid: Option<i32>,
     pub url: String,
-    pub userid: Option<i32>,
+    pub userid: Option<i64>,
     pub wstoken: String,
 }
 
@@ -95,7 +95,7 @@ impl ApiConfig {
             Ok(Some((userid, wstoken, url))) => Ok(ApiConfig {
                 wstoken,
                 courseid: None,
-                userid: Some(userid),
+                userid: Some(userid.into()),
                 client: reqwest::Client::new(),
                 url,
             }),

@@ -3,7 +3,8 @@
 use crate::db::insert_assignments;
 use crate::db::insert_content;
 use crate::db::insert_grades;
-use crate::db::insert_user;
+// use crate::db::insert_user;
+use crate::db::generic_insert;
 use crate::db::insert_pages;
 use crate::models::course_content::process_assignments;
 use crate::models::course_content::process_content;
@@ -91,22 +92,6 @@ pub async fn store_courses(
         .await?
     {
         write_course_conf(courses)?;
-    }
-
-    Ok(())
-}
-
-pub async fn store_user(
-    conn: &mut rusqlite::Connection,
-    api_config: &mut ApiConfig,
-) -> Result<(), CustomError> {
-
-    api_config.userid = None;
-    if let ProcessResult::User(user) = api_config
-        .call_json(conn, "core_webservice_get_site_info", process_user)
-        .await?
-    {
-        insert_user(conn, &user, api_config)?;
     }
 
     Ok(())

@@ -36,7 +36,7 @@ pub struct ApiParams {
     pub courseid: Option<i32>,
     pub moodlewsrestformat: String,
     pub returnusercount: Option<i32>,
-    pub userid: Option<i32>,
+    pub userid: Option<i64>,
     pub wstoken: String,
     pub wsfunction: String,
 }
@@ -51,6 +51,9 @@ pub enum CustomError {
     Api(String),
     MissingField(String),
     TypeMismatch(String),
+    Other(String),
+    TomlDe(toml::de::Error),
+    TomlSer(toml::ser::Error),
 }
 
 impl From<reqwest::Error> for CustomError {
@@ -80,5 +83,23 @@ impl From<std::io::Error> for CustomError {
 impl From<termimad::Error> for CustomError {
     fn from(err: termimad::Error) -> Self {
         CustomError::Termimad(err)
+    }
+}
+
+impl From<Box<dyn std::error::Error>> for CustomError {
+    fn from(err: Box<dyn std::error::Error>) -> Self {
+        CustomError::Other(err.to_string())
+    }
+}
+
+impl From<toml::de::Error> for CustomError {
+    fn from(err: toml::de::Error) -> Self {
+        CustomError::TomlDe(err)
+    }
+}
+
+impl From<toml::ser::Error> for CustomError {
+    fn from(err: toml::ser::Error) -> Self {
+        CustomError::TomlSer(err)
     }
 }

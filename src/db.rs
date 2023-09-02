@@ -3,10 +3,8 @@
 use crate::models::course_content::{Assignment, CourseSection, Grade, Page};
 use crate::models::response::CustomError;
 use crate::models::user::User;
-use crate::ws::ApiConfig;
-use rusqlite::OptionalExtension;
-
 use chrono::Utc;
+use rusqlite::OptionalExtension;
 use rusqlite::{params, Connection, Result};
 
 pub fn initialize_db() -> Result<Connection> {
@@ -31,31 +29,42 @@ pub fn create_user_table(conn: &rusqlite::Connection) -> Result<(), rusqlite::Er
     Ok(())
 }
 
-pub fn insert_user(
+pub trait Insertable {
+    fn insert_query() -> &'static str;
+    fn bind_parameters(&self) -> Vec<(&'static str, &dyn rusqlite::ToSql)>;
+}
+
+impl Insertable for User {
+    fn insert_query() -> &'static str {
+        "INSERT OR REPLACE INTO User (id, content, privkey, url, wstoken, lastfetched)
+            VALUES (:id, :content, :privkey, :url, :wstoken, :lastfetched)"
+    }
+
+    fn bind_parameters(&self) -> Vec<(&'static str, &dyn rusqlite::ToSql)> {
+        vec![
+            (":id", &self.id),
+            (":content", &self.content),
+            (":privkey", &self.privkey),
+            (":url", &self.url),
+            (":wstoken", &self.wstoken),
+            (":lastfetched", &self.lastfetched),
+        ]
+    }
+}
+
+pub fn generic_insert<T: Insertable>(
     conn: &mut rusqlite::Connection,
-    user: &User,
-    api_config: &ApiConfig,
-) -> Result<(), CustomError> {
+    item: &T,
+) -> Result<(), rusqlite::Error> {
     let tx = conn.transaction()?;
 
     {
-        let mut stmt = tx.prepare(
-            "INSERT OR REPLACE INTO User (id, content, privkey, url, wstoken, lastfetched)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        )?;
-
-        stmt.execute(params![
-            user.id,
-            user.content,
-            user.privkey,
-            api_config.url,
-            api_config.wstoken,
-            user.lastfetched,
-        ])?;
+        let mut stmt = tx.prepare(T::insert_query())?;
+        let params = item.bind_parameters();
+        stmt.execute(&params[..])?;
     }
 
     tx.commit()?;
-
     Ok(())
 }
 
