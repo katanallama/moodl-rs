@@ -1,9 +1,12 @@
 // db.rs
 //
-use crate::models::course_content::{Assignment, CourseSection, Grade};
+use crate::models::course_content::{Assignment, CourseSection, Grade, Page};
 use crate::models::response::CustomError;
 use crate::models::user::User;
 use crate::ws::ApiConfig;
+use rusqlite::OptionalExtension;
+
+use chrono::Utc;
 use rusqlite::{params, Connection, Result};
 
 pub fn initialize_db() -> Result<Connection> {
@@ -110,6 +113,30 @@ pub fn create_course_content_tables(conn: &rusqlite::Connection) -> Result<(), r
         (),
     )?;
 
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS Pages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            courseid INTEGER,
+            cmid INTEGER,
+            content TEXT NOT NULL,
+            lastfetched INTEGER,
+            lastmodified INTEGER,
+            UNIQUE(cmid)
+        );",
+        (),
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS PageHistory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cmid INTEGER,
+            content TEXT NOT NULL,
+            lastmodified INTEGER,
+            FOREIGN KEY(cmid) REFERENCES Pages(cmid)
+        );",
+        (),
+    )?;
+
     Ok(())
 }
 
@@ -152,6 +179,60 @@ pub fn insert_content(
                     module.content,
                     module.lastfetched
                 ])?;
+            }
+        }
+    }
+
+    tx.commit()?;
+
+    Ok(())
+}
+
+pub fn insert_pages(conn: &mut rusqlite::Connection, pages: &[Page]) -> Result<(), CustomError> {
+    let tx = conn.transaction()?;
+
+    {
+        let mut check_content_stmt = tx.prepare("SELECT content FROM Pages WHERE cmid = ?1")?;
+
+        let mut stmt = tx.prepare(
+            "INSERT OR REPLACE INTO Pages (courseid, cmid, content, lastfetched, lastmodified)
+                VALUES (?1, ?2, ?3, ?4, ?5)
+                ON CONFLICT(cmid) DO UPDATE SET
+                    content=excluded.content,
+                    lastfetched=excluded.lastfetched,
+                    lastmodified=excluded.lastmodified",
+        )?;
+
+        // audit trail of changes for the content of each page
+        let mut history_stmt = tx.prepare(
+            "INSERT INTO PageHistory (cmid, content, lastmodified)
+                VALUES (?1, ?2, ?3)",
+        )?;
+
+        let mut update_lastfetched_stmt =
+            tx.prepare("UPDATE Pages SET lastfetched = ?1 WHERE cmid = ?2")?;
+
+        let now = Utc::now().timestamp();
+
+        for page in pages {
+            let current_content: Option<String> = check_content_stmt
+                .query_row(params![page.cmid], |row| row.get(0))
+                .optional()?;
+
+            if current_content != Some(page.content.clone()) {
+                // Content has changed, so insert/replace and log to history
+                stmt.execute(params![
+                    page.courseid,
+                    page.cmid,
+                    page.content,
+                    page.lastfetched,
+                    now
+                ])?;
+
+                history_stmt.execute(params![page.cmid, page.content, now])?;
+            } else {
+                // Content hasn't changed, so just update lastfetched
+                update_lastfetched_stmt.execute(params![page.lastfetched, page.cmid,])?;
             }
         }
     }
