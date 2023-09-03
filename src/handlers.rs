@@ -1,12 +1,13 @@
 // handlers.rs
 //
 use {
-    crate::db::insert_assignments, crate::db::insert_content, crate::db::insert_grades,
-    crate::db::insert_pages, crate::models::course_content::process_assignments,
-    crate::models::course_content::process_content, crate::models::course_content::process_grades,
-    crate::models::course_content::process_pages, crate::models::user::process_courses,
-    crate::models::user::write_course_conf, crate::ApiConfig, crate::CustomError,
-    crate::ProcessResult,
+    crate::models::course_content::{process_grades, process_pages},
+    crate::models::user::{process_courses, write_course_conf},
+    crate::{
+        db::{insert_assignments, insert_content, insert_grades, insert_pages},
+        models::course_content::{process_assignments, process_content},
+    },
+    crate::{ApiConfig, CustomError, ProcessResult},
 };
 
 pub async fn store_grades(

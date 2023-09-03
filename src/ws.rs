@@ -1,20 +1,42 @@
 // ws.rs
-//
-use crate::db::get_user;
-use crate::models::response::{ApiParams, CustomError};
-use crate::process_result::ProcessResult;
-use serde_derive::Deserialize;
-use std::io::{self};
+#![allow(dead_code)]
 
+use crate::models::{secrets::Secrets, course_section::Section, assignments::Assignments, courses::Course, grades::UserGrade, pages::Pages};
+use anyhow::Result;
+use {reqwest, serde::Deserialize, serde::Serialize};
+
+
+#[derive(Serialize, Deserialize)]
 pub struct ApiConfig {
-    pub client: reqwest::Client,
-    pub courseid: Option<i32>,
-    pub url: String,
-    pub userid: Option<i64>,
-    pub wstoken: String,
+    base_url: String,
+    token: String,
+    userid: u32,
 }
 
-#[derive(Deserialize, Debug)]
+pub struct ApiClient {
+    base_url: String,
+    client: reqwest::Client,
+    wstoken: String,
+    userid: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ApiResponse {
+    Course(Vec<Course>),
+    Sections(Vec<Section>),
+    UserGrades(UserGradesResponse),
+    Pages(Pages),
+    Assignments(Assignments),
+    Exception(ApiError),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserGradesResponse {
+    usergrades: Vec<UserGrade>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ApiError {
     exception: String,
     errorcode: String,
@@ -22,88 +44,117 @@ pub struct ApiError {
     debuginfo: Option<String>,
 }
 
-impl ApiConfig {
-    pub async fn call_json(
-        &self,
-        conn: &rusqlite::Connection,
-        wsfunction: &str,
-        process_fn: fn(&rusqlite::Connection, &str) -> Result<ProcessResult, CustomError>,
-    ) -> Result<ProcessResult, CustomError> {
-        let params = ApiParams {
-            wstoken: self.wstoken.clone(),
-            wsfunction: wsfunction.to_string(),
+#[derive(Serialize)]
+pub struct QueryParameters<'a> {
+    wsfunction: Option<String>,
+    courseid: Option<u32>,
+    userid: Option<u32>,
+    moodlewsrestformat: String,
+    wstoken: String,
+    #[serde(skip)]
+    client: &'a ApiClient,
+}
+
+impl<'a> QueryParameters<'a> {
+    pub fn new(client: &'a ApiClient) -> Self {
+        QueryParameters {
+            wsfunction: None,
+            courseid: None,
+            userid: None,
             moodlewsrestformat: "json".to_string(),
-            courseid: self.courseid,
-            userid: self.userid,
-            returnusercount: None,
-        };
-
-        let response_text = self
-            .client
-            .post(self.url.clone())
-            .form(&params)
-            .send()
-            .await?
-            .text()
-            .await?;
-
-        if let Ok(api_error) = serde_json::from_str::<ApiError>(&response_text) {
-            match &api_error.exception[..] {
-                "moodle_exception" => {
-                    if api_error.errorcode == "sitemaintenance" {
-                        return Err(CustomError::Api(format!(
-                            "Exception: {} :: {}",
-                            api_error.exception, api_error.message
-                        )));
-                    }
-                }
-                "required_capability_exception" => {
-                    if api_error.errorcode == "nopermissions" {
-                        return Err(CustomError::Api(format!(
-                            "Exception: {} :: {}",
-                            api_error.exception, api_error.message
-                        )));
-                    }
-                }
-                "invalid_parameter_exception" => {
-                    if api_error.errorcode == "invalidparameter" {
-                        // If there's debuginfo available, include it in the error message
-                        if let Some(debug_info) = &api_error.debuginfo {
-                            return Err(CustomError::Api(format!(
-                                "Exception: {} :: {}. {}",
-                                api_error.exception, api_error.message, debug_info
-                            )));
-                        } else {
-                            return Err(CustomError::Api(format!(
-                                "Exception: {} :: {}",
-                                api_error.exception, api_error.message
-                            )));
-                        }
-                    }
-                }
-                _ => {
-                    // TODO General error handling
-                }
-            }
+            wstoken: "".to_string(),
+            client,
         }
-
-        Ok(process_fn(&conn, &response_text)?)
     }
 
-    pub fn get_saved_api_config(conn: &rusqlite::Connection) -> Result<Self, CustomError> {
-        match get_user(&conn, None) {
-            Ok(Some((userid, wstoken, url))) => Ok(ApiConfig {
-                wstoken,
-                courseid: None,
-                userid: Some(userid.into()),
-                client: reqwest::Client::new(),
-                url,
-            }),
-            Ok(None) => Err(CustomError::Io(io::Error::new(
-                io::ErrorKind::NotFound,
-                "User not found in database. Please run the init command.",
-            ))),
-            Err(e) => Err(CustomError::Rusqlite(e)),
+    pub fn function(mut self, function: &str) -> Self {
+        self.wsfunction = Some(function.to_string());
+        self
+    }
+
+    pub fn courseid(mut self, courseid: u32) -> Self {
+        self.courseid = Some(courseid);
+        self
+    }
+
+    pub fn use_default_userid(mut self) -> Self {
+        self.userid = Some(self.client.userid);
+        self
+    }
+
+    pub fn userid(mut self, userid: Option<u32>) -> Self {
+        self.userid = userid;
+        self
+    }
+}
+
+
+impl ApiClient {
+    pub fn new(base_url: &str, token: &str, userid: &u32) -> Self {
+        ApiClient {
+            base_url: base_url.to_string(),
+            wstoken: token.to_string(),
+            client: reqwest::Client::new(),
+            userid: userid.clone(),
         }
+    }
+
+    pub fn from_secrets(secrets: &Secrets) -> Result<Self> {
+        // let secrets = secrets::read_secrets(path)?;
+        Ok(ApiClient::new(
+            &secrets.api.base_url,
+            &secrets.api.token,
+            &secrets.api.userid,
+        ))
+    }
+
+    pub async fn _fetch_text<T: ApiQuery>(&self, query: T) -> Result<String> {
+        let response = self
+            .client
+            .get(&self.base_url)
+            .query(&query.with_token(&self.wstoken))
+            .send()
+            .await?;
+
+        // debugging nightmare this is
+        // let sections: Result<Vec<Section>, _> = serde_json::from_str(&response.text().await?);
+        // let sections: Result<Vec<Course>, _> = serde_json::from_str(&response.text().await?);
+        // let sections: Result<Pages, _> = serde_json::from_str(&response.text().await?);
+        // let sections: Result<UserGrade, _> = serde_json::from_str(&response.text().await?);
+        // let sections: Result<Assignments, _> = serde_json::from_str(&response.text().await?);
+        // let responseback = response.text().await?;
+        // println!("{:#?}", responseback);
+        // println!("{:#?}", sections);
+        // Ok("OK".to_string())
+        Ok(response.text().await?)
+    }
+
+    pub async fn fetch<T: ApiQuery>(&self, query: T) -> Result<ApiResponse> {
+        let response = self
+            .client
+            .get(&self.base_url)
+            .query(&query.with_token(&self.wstoken))
+            .send()
+            .await?;
+
+        // println!("{:#?}", response);
+        Ok(response.json::<ApiResponse>().await?)
+    }
+}
+
+pub trait ApiQuery: Serialize {
+    fn with_token(self, token: &str) -> Self;
+    fn with_userid(self, userid: Option<u32>) -> Self;
+}
+
+impl ApiQuery for QueryParameters<'_> {
+    fn with_token(mut self, token: &str) -> Self {
+        self.wstoken = token.to_string();
+        self
+    }
+
+    fn with_userid(mut self, userid: Option<u32>) -> Self {
+        self.userid = userid;
+        self
     }
 }
