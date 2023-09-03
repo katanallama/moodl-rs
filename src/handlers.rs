@@ -1,21 +1,13 @@
 // handlers.rs
 //
-use crate::db::insert_assignments;
-use crate::db::insert_content;
-use crate::db::insert_grades;
-// use crate::db::insert_user;
-use crate::db::generic_insert;
-use crate::db::insert_pages;
-use crate::models::course_content::process_assignments;
-use crate::models::course_content::process_content;
-use crate::models::course_content::process_grades;
-use crate::models::course_content::process_pages;
-use crate::models::user::process_courses;
-use crate::models::user::process_user;
-use crate::models::user::write_course_conf;
-use crate::ApiConfig;
-use crate::CustomError;
-use crate::ProcessResult;
+use {
+    crate::db::insert_assignments, crate::db::insert_content, crate::db::insert_grades,
+    crate::db::insert_pages, crate::models::course_content::process_assignments,
+    crate::models::course_content::process_content, crate::models::course_content::process_grades,
+    crate::models::course_content::process_pages, crate::models::user::process_courses,
+    crate::models::user::write_course_conf, crate::ApiConfig, crate::CustomError,
+    crate::ProcessResult,
+};
 
 pub async fn store_grades(
     conn: &mut rusqlite::Connection,
