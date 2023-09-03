@@ -8,7 +8,7 @@ mod ui;
 mod ws;
 
 use {
-    db::{create_course_content_tables, create_user_table, initialize_db},
+    db::{create_user_tables, initialize_db},
     handlers::{store_assignments, store_content, store_courses, store_grades, store_pages},
     models::response::CustomError,
     models::user::{init, store_user},
@@ -31,7 +31,7 @@ async fn main() -> Result<(), CustomError> {
     let command = prompt_command(&skin)?;
 
     let mut conn = initialize_db()?;
-    create_user_table(&conn)?;
+    create_user_tables(&conn)?;
 
     let mut api_config = if let UserCommand::Init = command {
         init(&mut conn).await?
@@ -46,7 +46,6 @@ async fn main() -> Result<(), CustomError> {
             store_user(&mut conn, &mut api_config).await?;
             let mut api_config = ApiConfig::get_saved_api_config(&conn)?;
             store_courses(&mut conn, &mut api_config).await?;
-            create_course_content_tables(&conn)?;
         }
         UserCommand::Section => {
             fetch_and_print_modules(&conn, test_course)?;

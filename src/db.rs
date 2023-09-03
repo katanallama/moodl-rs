@@ -12,23 +12,6 @@ pub fn initialize_db() -> Result<Connection> {
     Ok(conn)
 }
 
-pub fn create_user_table(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS User (
-            id INTEGER PRIMARY KEY,
-            content TEXT NOT NULL,
-            privkey TEXT NOT NULL,
-            url TEXT NOT NULL,
-            wstoken TEXT NOT NULL,
-            lastfetched INTEGER
-        )",
-        (),
-    )?;
-
-    println!("[INFO] User table has been created");
-    Ok(())
-}
-
 pub trait Insertable {
     fn insert_query() -> &'static str;
     fn bind_parameters(&self) -> Vec<(&'static str, &dyn rusqlite::ToSql)>;
@@ -68,7 +51,21 @@ pub fn generic_insert<T: Insertable>(
     Ok(())
 }
 
-pub fn create_course_content_tables(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
+pub fn create_user_tables(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS User (
+            id INTEGER PRIMARY KEY,
+            content TEXT NOT NULL,
+            privkey TEXT NOT NULL,
+            url TEXT NOT NULL,
+            wstoken TEXT NOT NULL,
+            lastfetched INTEGER
+        )",
+        (),
+    )?;
+
+    println!("[INFO] User table has been created");
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS Sections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
