@@ -2,8 +2,11 @@
 //
 #![allow(dead_code)]
 
+use parser::write_course_content_to_file;
+
 mod db;
 mod models;
+mod parser;
 mod ws;
 
 use {
@@ -52,7 +55,7 @@ async fn main() -> Result<()> {
             for course in secrets.courses {
                 let response = fetch_course_contents(&client, course.id).await?;
                 if let ApiResponse::Sections(mut sections) = response {
-                    course_section::insert_sections(&mut conn, &mut sections)?;
+                    course_section::insert_sections(&mut conn, &mut sections, course.id)?;
                 }
             }
 
@@ -61,7 +64,10 @@ async fn main() -> Result<()> {
                 insert_pages(&mut conn, &mut pages.pages)?;
             }
         }
-        UserCommand::Parse => {}
+        UserCommand::Parse => {
+            write_course_content_to_file(&conn, 29737, "test")?;
+        }
+
         UserCommand::Default => {}
     }
 

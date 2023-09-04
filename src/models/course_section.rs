@@ -10,34 +10,40 @@ pub struct Section {
     pub id: i64,
     pub name: String,
     pub summary: String,
+    pub courseid: Option<i64>,
     pub modules: Vec<Module>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Module {
-    id: i64,
-    name: String,
-    instance: Option<i64>,
-    contextid: Option<i64>,
-    description: Option<String>,
-    contents: Option<Vec<Content>>,
-    section_id: Option<i64>,
+    pub id: i64,
+    pub name: String,
+    pub instance: Option<i64>,
+    pub contextid: Option<i64>,
+    pub description: Option<String>,
+    pub contents: Option<Vec<Content>>,
+    pub section_id: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Content {
     #[serde(rename = "type")]
-    content_type: String,
-    filename: Option<String>,
-    fileurl: Option<String>,
-    timemodified: Option<i64>,
-    module_id: Option<i64>,
+    pub content_type: String,
+    pub filename: Option<String>,
+    pub fileurl: Option<String>,
+    pub timemodified: Option<i64>,
+    pub module_id: Option<i64>,
 }
 
-pub fn insert_sections(conn: &mut rusqlite::Connection, sections: &mut [Section]) -> Result<()> {
+pub fn insert_sections(
+    conn: &mut rusqlite::Connection,
+    sections: &mut [Section],
+    courseid: i64,
+) -> Result<()> {
     let tx = conn.transaction()?;
 
     for section in sections.iter_mut() {
+        section.courseid = Some(courseid);
         generic_insert(&tx, section)?;
 
         for module in section.modules.iter_mut() {
@@ -59,8 +65,8 @@ pub fn insert_sections(conn: &mut rusqlite::Connection, sections: &mut [Section]
 
 impl Insertable for Section {
     fn insert_query() -> &'static str {
-        "INSERT INTO Sections (sectionid, name, summary, lastfetched)
-            VALUES (:sectionid, :name, :summary, CURRENT_TIMESTAMP)
+        "INSERT INTO Sections (sectionid, name, summary, courseid, lastfetched)
+            VALUES (:sectionid, :name, :summary, :courseid, CURRENT_TIMESTAMP)
             ON CONFLICT(sectionid) DO UPDATE SET
                 name=excluded.name,
                 summary=excluded.summary,
@@ -72,6 +78,7 @@ impl Insertable for Section {
             (":sectionid", &self.id),
             (":name", &self.name),
             (":summary", &self.summary),
+            (":courseid", &self.courseid),
         ]
     }
 }

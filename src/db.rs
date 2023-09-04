@@ -28,6 +28,7 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error>
             name TEXT,
             summary TEXT,
             lastfetched DATETIME,
+            courseid INTEGER,
             UNIQUE(sectionid)
         );",
         (),
