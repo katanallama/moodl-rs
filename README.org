@@ -1,20 +1,91 @@
 * Moodl-rs
 
+Do you hate moodle as much as I do? Has your institution also implemented a slow, hard on the eyes UI that makes finding your course resources worse than pulling teeth? Do you live in a terminal? Then this is for you.
 
+** Getting Started
 
-To init the db and courses:
-
-#+begin_src sh
-cargo run -- --wstoken <wstoken>
-#+end_src
-
-To fetch grades for a given course:
+You'll need ~sqlite3~ on your system, go ahead and install that if you haven't. It's included in the flake if you're on nix.
 
 #+begin_src sh
-cargo run -- --wstoken <wstoken> --courseid <courseid>
+cargo run
 #+end_src
 
-Replace ~<wstoken>~ with your "Moodle Mobile additional features service" key.
+#+begin_src sh
+Choose a command to run:
+[i] Init - Initialize user information
+  Ensure 'Secrets.toml' has your Moodle Mobile Service Key and URL.
+  Then delete courses you are not interested in from 'Secrets.toml'.
+[f] Fetch - Fetch course materials
+[p] Parse - Parse a course (not implemented)
+[d] Default - Run the default commands (not implemented)
+i
+Track the course TEST_COURSE_1?
+[y] Yes, track it
+[n] No, skip it
+n
+Track the course TEST_COURSE_2?
+[y] Yes, track it
+[n] No, skip it
+y
+Track the course TEST_COURSE_3?
+[y] Yes, track it
+[n] No, skip it
+n
+#+end_src
+
+Then fetch your course materials:
+
+#+begin_src sh
+Choose a command to run:
+[i] Init - Initialize user information
+  Ensure 'Secrets.toml' has your Moodle Mobile Service Key and URL.
+  Then delete courses you are not interested in from 'Secrets.toml'.
+[f] Fetch - Fetch course materials
+[p] Parse - Parse a course (not implemented)
+[d] Default - Run the default commands (not implemented)
+f
+#+end_src
+
+Currently everything will just be stored in a handy ~sqlite~ db, but parsing to ~.md~ and ~.org~ files and downloading ~.pdf~s, etc. is coming.
+
+** Setup
+
+The configuration is done in a ~Secrets.toml~ file, yours should look like this to start:
+
+#+begin_src sh
+[api]
+base_url = "https://urcourses.uregina.ca/webservice/rest/server.php"
+token = "your-token-here"
+userid = 123456 # replace with your ID not student number
+
+[[courses]]
+id = 12345
+shortname = "TEST_COURSE"
+path = "TEST"
+#+end_src
+
+If you don't know your ID for moodle, go to your profile and copy any link to a Course Profile and it's embedded in the url. I'll implement something to grab it soon.
+
+After running ~Init~ it should look like this, but with your newly selected courses:
+
+#+begin_src sh
+[api]
+base_url = "https://urcourses.uregina.ca/webservice/rest/server.php"
+token = "your-token-here"
+userid = 123456 # replaced with your ID not student number
+
+[[courses]]
+id = 12345
+shortname = "TEST_COURSE_1"
+
+[[courses]]
+id = 22345
+shortname = "TEST_COURSE_2"
+
+[[courses]]
+id = 32345
+shortname = "TEST_COURSE_3"
+#+end_src
 
 
 * Roadmap
@@ -25,7 +96,7 @@ Replace ~<wstoken>~ with your "Moodle Mobile additional features service" key.
 
 **** TODO Improved config handling
 
-**** TODO Course selection and archiving
+**** TODO Course selection
 
 *** TODO Parsing course contents to ~.org~ or ~.md~
 
