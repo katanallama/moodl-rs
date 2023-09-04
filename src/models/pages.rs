@@ -4,36 +4,36 @@ use crate::db::generic_insert;
 use crate::db::Insertable;
 use anyhow::Result;
 use rusqlite::ToSql;
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Pages {
     pub pages: Vec<Page>,
-    warnings: Vec<HashMap<String, String>>,
+    pub warnings: Vec<HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Page {
-    id: i64,
-    coursemodule: i64,
-    course: i64,
-    name: Option<String>,
-    intro: Option<String>,
-    introfiles: Vec<File>,
-    content: Option<String>,
-    contentfiles: Vec<File>,
-    revision: i64,
-    timemodified: i64,
+    pub id: i64,
+    pub coursemodule: i64,
+    pub course: i64,
+    pub name: Option<String>,
+    pub intro: Option<String>,
+    pub introfiles: Vec<File>,
+    pub content: Option<String>,
+    pub contentfiles: Vec<File>,
+    pub revision: i64,
+    pub timemodified: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct File {
-    filename: Option<String>,
-    filepath: Option<String>,
-    fileurl: Option<String>,
-    timemodified: Option<i64>,
-    page_id: Option<i64>,
+    pub filename: Option<String>,
+    pub filepath: Option<String>,
+    pub fileurl: Option<String>,
+    pub timemodified: Option<i64>,
+    pub page_id: Option<i64>,
 }
 
 pub fn insert_pages(conn: &mut rusqlite::Connection, pages: &mut [Page]) -> Result<()> {
