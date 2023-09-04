@@ -8,6 +8,7 @@ mod ws;
 
 use {
     crate::models::courses::*,
+    crate::models::pages::*,
     crate::models::secrets::*,
     crate::ws::ApiResponse,
     crate::ws::*,
@@ -49,11 +50,15 @@ async fn main() -> Result<()> {
         }
         UserCommand::Fetch => {
             for course in secrets.courses {
-                // let response = fetch_course_contents(&client, 29737).await?;
                 let response = fetch_course_contents(&client, course.id).await?;
                 if let ApiResponse::Sections(mut sections) = response {
                     course_section::insert_sections(&mut conn, &mut sections)?;
                 }
+            }
+
+            let mut response = fetch_course_pages(&client).await?;
+            if let ApiResponse::Pages(ref mut pages) = response {
+                insert_pages(&mut conn, &mut pages.pages)?;
             }
         }
         UserCommand::Parse => {}
@@ -103,13 +108,12 @@ fn prompt_courses(courses: &Vec<Course>, skin: &MadSkin) -> Result<Vec<CourseSec
     Ok(selected_courses)
 }
 
-async fn fetch_course_pages(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
-    let query = QueryParameters::new(client)
-        .function(GET_PAGES)
-        .courseid(course_id);
+async fn fetch_course_pages(client: &ApiClient) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client).function(GET_PAGES);
     client.fetch(query).await
 }
 
+// TODO implement the db stuff for this
 async fn fetch_user_assignments(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
     let query = QueryParameters::new(client)
         .function(GET_ASSIGNMENTS)
@@ -124,6 +128,7 @@ async fn fetch_course_contents(client: &ApiClient, course_id: i64) -> Result<Api
     client.fetch(query).await
 }
 
+// TODO implement the db stuff for this
 async fn fetch_course_grades(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
     let query = QueryParameters::new(client)
         .function(GET_GRADES)

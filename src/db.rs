@@ -8,12 +8,10 @@ pub fn initialize_db() -> Result<Connection> {
     Ok(conn)
 }
 
-
 pub trait Insertable {
     fn insert_query() -> &'static str;
     fn bind_parameters(&self) -> Vec<(&'static str, &dyn rusqlite::ToSql)>;
 }
-
 
 pub fn generic_insert<T: Insertable>(tx: &Transaction, item: &T) -> Result<()> {
     let mut stmt = tx.prepare(T::insert_query())?;
@@ -21,7 +19,6 @@ pub fn generic_insert<T: Insertable>(tx: &Transaction, item: &T) -> Result<()> {
     stmt.execute(&params[..])?;
     Ok(())
 }
-
 
 pub fn create_tables(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
     conn.execute(
@@ -62,6 +59,37 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error>
             module_id INTEGER,
             UNIQUE(filename, fileurl, module_id),
             FOREIGN KEY (module_id) REFERENCES Modules(moduleid)
+        );",
+        (),
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS Pages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pageid INTEGER,
+            coursemodule INTEGER,
+            course INTEGER,
+            name TEXT,
+            intro TEXT,
+            content TEXT,
+            revision INTEGER,
+            timemodified DATETIME,
+            lastfetched DATETIME,
+            UNIQUE(pageid)
+        );",
+        (),
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS Files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT,
+            fileurl TEXT,
+            timemodified DATETIME,
+            lastfetched DATETIME,
+            page_id INTEGER,
+            UNIQUE(filename, page_id),
+            FOREIGN KEY (page_id) REFERENCES Pages(pageid)
         );",
         (),
     )?;
