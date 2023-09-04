@@ -1,38 +1,33 @@
+// models/pages.rs
+//
 use std::collections::HashMap;
 use {serde::Deserialize, serde::Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Pages {
     pages: Vec<Page>,
-    warnings: Vec<HashMap<String, String>>,  // Assuming warnings contain key-value pairs
+    warnings: Vec<HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Page {
-    id: u32,
-    coursemodule: u32,
-    course: u32,
-    name: String,
-    intro: String,
-    introfiles: Vec<File>,  // Or Vec<HashMap<String, String>> if the structure is unknown
-    section: u8,
-    // visible: bool,
-    // groupmode: u8,
-    // groupingid: u32,
-    content: String,
+    id: i64,
+    coursemodule: i64,
+    course: i64,
+    name: Option<String>,
+    intro: Option<String>,
+    introfiles: Vec<File>,
+    content: Option<String>,
     contentfiles: Vec<File>,
-    // legacyfiles: u8,
-    // legacyfileslast: Option<u32>,
-    // display: u8,
-    // displayoptions: String,
-    revision: u32,
-    timemodified: u64,
+    revision: i64,
+    timemodified: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct File {
-    filename: String,
-    filepath: String,
-    fileurl: String,
-    timemodified: u64,
+    filename: Option<String>,
+    filepath: Option<String>,
+    fileurl: Option<String>,
+    timemodified: Option<i64>,
+    page_id: Option<i64>,
 }
