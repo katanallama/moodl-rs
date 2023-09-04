@@ -1,134 +1,150 @@
 // main.rs
 //
+#![allow(dead_code)]
+
+mod db;
 mod models;
 mod ws;
 
-use crate::models::secrets::*;
-use crate::models::courses::*;
-use crate::ws::*;
-use anyhow::Result;
+use {
+    crate::models::courses::*,
+    crate::models::secrets::*,
+    crate::ws::ApiResponse,
+    crate::ws::*,
+    anyhow::Result,
+    models::course_section,
+    termimad::{crossterm::style::Color::*, MadSkin, Question, *},
+};
+
+enum UserCommand {
+    Init,
+    Parse,
+    Fetch,
+    Default,
+}
+
+const GET_ASSIGNMENTS: &str = "mod_assign_get_assignments";
+const GET_CONTENTS: &str = "core_course_get_contents";
+const GET_COURSES: &str = "core_enrol_get_users_courses";
+const GET_GRADES: &str = "gradereport_user_get_grade_items";
+const GET_PAGES: &str = "mod_page_get_pages_by_courses";
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let skin = make_skin();
+    let command = prompt_command(&skin)?;
+
+    let mut conn = db::initialize_db()?;
     let mut secrets = read_secrets("Secrets.toml")?;
     let client = ApiClient::from_secrets(&secrets)?;
 
-    let query = QueryParameters::new(&client)
-        .function("core_enrol_get_users_courses")
-        .use_default_userid();
-
-    let response = client.fetch(query).await?;
-    println!("Response: {:#?}", response);
-
-    match response {
-        ApiResponse::Course(course) => {
-            secrets.write_courses(ws::ApiResponse::Course(course))?;
+    match command {
+        UserCommand::Init => {
+            db::create_tables(&conn)?;
+            let response = fetch_user_courses(&client).await?;
+            if let ApiResponse::Course(course_list) = response {
+                let selected_courses = prompt_courses(&course_list, &skin)?;
+                secrets.write_courses(selected_courses)?;
+            }
         }
-        // Handle other ApiResponse variants if needed, or just skip
-        _ => {
-            // Optionally log or handle unexpected responses
+        UserCommand::Fetch => {
+            for course in secrets.courses {
+                // let response = fetch_course_contents(&client, 29737).await?;
+                let response = fetch_course_contents(&client, course.id).await?;
+                if let ApiResponse::Sections(mut sections) = response {
+                    course_section::insert_sections(&mut conn, &mut sections)?;
+                }
+            }
         }
+        UserCommand::Parse => {}
+        UserCommand::Default => {}
     }
 
     Ok(())
 }
 
-// let query = QueryParameters::new(&client)
-// .function("mod_assign_get_assignments")
-// .function("mod_page_get_pages_by_courses")
-// .function("core_enrol_get_users_courses")
-// .function("core_course_get_contents")
-// .function("gradereport_user_get_grade_items")
-// .use_default_userid()
-// .courseid(29737)
+fn prompt_command(skin: &MadSkin) -> Result<UserCommand> {
+    let mut q = Question::new("Choose a command to run:");
+    q.add_answer("i", "**I**nit - Initialize user information\n\tEnsure 'Secrets.toml' has your Moodle Mobile Service Key and URL.\n\tThen delete courses you are not interested in from 'Secrets.toml'.");
+    q.add_answer("f", "**F**etch - Fetch course materials");
+    q.add_answer("p", "**P**arse - Parse a course");
+    q.add_answer("d", "Default - Run the default commands");
+    let a = q.ask(skin)?;
 
-// mod db;
-// mod handlers;
-// mod models;
-// mod process_result;
-// mod ui;
-// mod ws;
+    match a.as_str() {
+        "i" => Ok(UserCommand::Init),
+        "f" => Ok(UserCommand::Fetch),
+        "p" => Ok(UserCommand::Parse),
+        _ => Ok(UserCommand::Default),
+    }
+}
 
-// use {
-//     db::{create_user_tables, initialize_db},
-//     handlers::{store_assignments, store_content, store_courses, store_grades, store_pages},
-//     models::response::CustomError,
-//     models::user::{init, store_user},
-//     process_result::ProcessResult,
-//     termimad::{crossterm::style::Color::*, MadSkin, Question, *},
-//     ui::parser::fetch_and_print_modules,
-//     ws::ApiConfig,
-// };
+fn prompt_courses(courses: &Vec<Course>, skin: &MadSkin) -> Result<Vec<CourseSecret>> {
+    let mut selected_courses = Vec::new();
 
-// enum UserCommand {
-//     Init,
-//     Section,
-//     Fetch,
-//     Default,
-// }
+    for course in courses.iter() {
+        let question = format!(
+            "Track the course *{}*?",
+            course.shortname.as_ref().unwrap_or(&"Unknown".to_string())
+        );
 
-// #[tokio::main]
-// async fn main() -> Result<(), CustomError> {
-//     let skin = make_skin();
-//     let command = prompt_command(&skin)?;
+        let mut q = Question::new(&question);
+        q.add_answer('y', "**Y**es, track it");
+        q.add_answer('n', "**N**o, skip it");
+        q.set_default('y');
 
-//     let mut conn = initialize_db()?;
-//     create_user_tables(&conn)?;
+        let answer = q.ask(skin)?;
 
-//     let mut api_config = if let UserCommand::Init = command {
-//         init(&mut conn).await?
-//     } else {
-//         ApiConfig::get_saved_api_config(&conn)?
-//     };
+        if answer == "y" {
+            selected_courses.push(CourseSecret::from(course));
+        }
+    }
 
-//     let test_course = 29737;
+    Ok(selected_courses)
+}
 
-//     match command {
-//         UserCommand::Init => {
-//             store_user(&mut conn, &mut api_config).await?;
-//             let mut api_config = ApiConfig::get_saved_api_config(&conn)?;
-//             store_courses(&mut conn, &mut api_config).await?;
-//         }
-//         UserCommand::Section => {
-//             fetch_and_print_modules(&conn, test_course)?;
-//         }
-//         UserCommand::Fetch => {
-//             store_grades(&mut conn, &mut api_config, test_course).await?;
-//             store_assignments(&mut conn, &mut api_config, test_course).await?;
-//             store_content(&mut conn, &mut api_config, test_course).await?;
-//             store_pages(&mut conn, &mut api_config).await?;
-//         }
-//         UserCommand::Default => {
-//             fetch_and_print_modules(&conn, test_course)?;
-//         }
-//     }
+async fn fetch_course_pages(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client)
+        .function(GET_PAGES)
+        .courseid(course_id);
+    client.fetch(query).await
+}
 
-//     Ok(())
-// }
+async fn fetch_user_assignments(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client)
+        .function(GET_ASSIGNMENTS)
+        .courseid(course_id);
+    client.fetch(query).await
+}
 
-// fn prompt_command(skin: &MadSkin) -> Result<UserCommand, CustomError> {
-//     let mut q = Question::new("Choose a command to run:");
-//     q.add_answer("i", "**I**nit - Initialize user information\n\tEnsure 'Secrets.toml' has your Moodle Mobile Service Key and URL.\n\tThen delete courses you are not interested in from 'Secrets.toml'.");
-//     q.add_answer("s", "**S**ection - Handle sections");
-//     q.add_answer("f", "**F**etch - Fetch resources from moodle");
-//     q.add_answer("d", "Default - Run the default commands");
-//     let a = q.ask(skin)?;
+async fn fetch_course_contents(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client)
+        .function(GET_CONTENTS)
+        .courseid(course_id);
+    client.fetch(query).await
+}
 
-//     match a.as_str() {
-//         "i" => Ok(UserCommand::Init),
-//         "s" => Ok(UserCommand::Section),
-//         "f" => Ok(UserCommand::Fetch),
-//         _ => Ok(UserCommand::Default),
-//     }
-// }
+async fn fetch_course_grades(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client)
+        .function(GET_GRADES)
+        .courseid(course_id);
+    client.fetch(query).await
+}
 
-// fn make_skin() -> MadSkin {
-//     let mut skin = MadSkin::default();
-//     skin.table.align = Alignment::Center;
-//     skin.set_headers_fg(AnsiValue(178));
-//     skin.bold.set_fg(Yellow);
-//     skin.italic.set_fg(Magenta);
-//     skin.scrollbar.thumb.set_fg(AnsiValue(178));
-//     skin.code_block.align = Alignment::Center;
-//     skin
-// }
+async fn fetch_user_courses(client: &ApiClient) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client)
+        .function(GET_COURSES)
+        .use_default_userid();
+    client.fetch(query).await
+}
+
+fn make_skin() -> MadSkin {
+    let mut skin = MadSkin::default();
+    skin.table.align = Alignment::Center;
+    skin.set_headers_fg(AnsiValue(178));
+    skin.bold.set_fg(Yellow);
+    skin.italic.set_fg(Magenta);
+    skin.scrollbar.thumb.set_fg(AnsiValue(178));
+    skin.code_block.align = Alignment::Center;
+    skin
+}

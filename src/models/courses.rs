@@ -7,7 +7,7 @@ pub struct Courses (pub Vec<Course>);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Course {
-    pub id: i32,
+    pub id: i64,
     pub shortname: Option<String>,
     pub summary: Option<String>,
 }

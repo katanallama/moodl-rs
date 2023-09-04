@@ -4,13 +4,11 @@ use crate::ws::ApiConfig;
 use anyhow::Result;
 use {serde::Deserialize, serde::Serialize, std::fs, toml};
 
-// use super::courses::Courses;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CourseSecret {
-    pub id: i32,
+    pub id: i64,
     pub shortname: Option<String>,
-    pub filepath: Option<String>,  // new field
+    pub filepath: Option<String>,
 }
 
 impl From<&crate::Course> for CourseSecret {
@@ -19,7 +17,7 @@ impl From<&crate::Course> for CourseSecret {
             id: course.id,
             shortname: course.shortname.clone(),
             filepath: None,
-            // filepath: Some(format!("./data/{}.txt", course.id)),  // e.g., derive filepath from course id
+            // filepath: Some(format!("./data/{}/", course.id)),  // e.g., derive filepath from course id
         }
     }
 }
@@ -31,23 +29,10 @@ pub struct Secrets {
 }
 
 impl Secrets {
-    pub fn write_courses(&mut self, new_courses: crate::ApiResponse) -> Result<()> {
-        // Convert the courses from the ApiResponse into CourseSecrets
-        if let crate::ApiResponse::Course(course_list) = &new_courses {
-            let course_secrets: Vec<CourseSecret> = course_list.iter().map(CourseSecret::from).collect();
-
-            // Update the courses in the current state
-            self.courses = course_secrets;
-
-            // Serialize the updated data into TOML format
-            let updated_secrets = toml::to_string(self)?;
-
-            // Write the serialized data back to the 'Secrets.toml' file
-            fs::write("Secrets.toml", updated_secrets)?;
-        } else {
-            // Handle unexpected `ApiResponse` variants, possibly return an error or log
-            // ...
-        }
+    pub fn write_courses(&mut self, new_courses: Vec<CourseSecret>) -> Result<()> {
+        self.courses = new_courses;
+        let updated_secrets = toml::to_string(self)?;
+        fs::write("Secrets.toml", updated_secrets)?;
 
         Ok(())
     }

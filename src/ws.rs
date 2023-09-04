@@ -10,21 +10,21 @@ use {reqwest, serde::Deserialize, serde::Serialize};
 pub struct ApiConfig {
     base_url: String,
     token: String,
-    userid: u32,
+    userid: i64,
 }
 
 pub struct ApiClient {
     base_url: String,
     client: reqwest::Client,
     wstoken: String,
-    userid: u32,
+    userid: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ApiResponse {
-    Course(Vec<Course>),
     Sections(Vec<Section>),
+    Course(Vec<Course>),
     UserGrades(UserGradesResponse),
     Pages(Pages),
     Assignments(Assignments),
@@ -47,8 +47,8 @@ pub struct ApiError {
 #[derive(Serialize)]
 pub struct QueryParameters<'a> {
     wsfunction: Option<String>,
-    courseid: Option<u32>,
-    userid: Option<u32>,
+    courseid: Option<i64>,
+    userid: Option<i64>,
     moodlewsrestformat: String,
     wstoken: String,
     #[serde(skip)]
@@ -72,7 +72,7 @@ impl<'a> QueryParameters<'a> {
         self
     }
 
-    pub fn courseid(mut self, courseid: u32) -> Self {
+    pub fn courseid(mut self, courseid: i64) -> Self {
         self.courseid = Some(courseid);
         self
     }
@@ -82,7 +82,7 @@ impl<'a> QueryParameters<'a> {
         self
     }
 
-    pub fn userid(mut self, userid: Option<u32>) -> Self {
+    pub fn userid(mut self, userid: Option<i64>) -> Self {
         self.userid = userid;
         self
     }
@@ -90,7 +90,7 @@ impl<'a> QueryParameters<'a> {
 
 
 impl ApiClient {
-    pub fn new(base_url: &str, token: &str, userid: &u32) -> Self {
+    pub fn new(base_url: &str, token: &str, userid: &i64) -> Self {
         ApiClient {
             base_url: base_url.to_string(),
             wstoken: token.to_string(),
@@ -144,7 +144,7 @@ impl ApiClient {
 
 pub trait ApiQuery: Serialize {
     fn with_token(self, token: &str) -> Self;
-    fn with_userid(self, userid: Option<u32>) -> Self;
+    fn with_userid(self, userid: Option<i64>) -> Self;
 }
 
 impl ApiQuery for QueryParameters<'_> {
@@ -153,7 +153,7 @@ impl ApiQuery for QueryParameters<'_> {
         self
     }
 
-    fn with_userid(mut self, userid: Option<u32>) -> Self {
+    fn with_userid(mut self, userid: Option<i64>) -> Self {
         self.userid = userid;
         self
     }
