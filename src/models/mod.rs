@@ -1,4 +1,5 @@
 pub mod assignments;
+pub mod course_details;
 pub mod course_section;
 pub mod courses;
 pub mod grades;

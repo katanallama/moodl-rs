@@ -2,8 +2,6 @@
 //
 #![allow(dead_code)]
 
-use parser::write_course_content_to_file;
-
 mod db;
 mod models;
 mod parser;
@@ -16,7 +14,9 @@ use {
     crate::ws::ApiResponse,
     crate::ws::*,
     anyhow::Result,
-    models::course_section,
+    models::course_details::parse_course_json,
+    models::course_section::insert_sections,
+    parser::save_markdown_to_file,
     termimad::{crossterm::style::Color::*, MadSkin, Question, *},
 };
 
@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
             for course in secrets.courses {
                 let response = fetch_course_contents(&client, course.id).await?;
                 if let ApiResponse::Sections(mut sections) = response {
-                    course_section::insert_sections(&mut conn, &mut sections, course.id)?;
+                    insert_sections(&mut conn, &mut sections, course.id)?;
                 }
             }
 
@@ -65,7 +65,8 @@ async fn main() -> Result<()> {
             }
         }
         UserCommand::Parse => {
-            write_course_content_to_file(&conn, 29737, "test")?;
+            let json = parse_course_json(&conn, 29737)?;
+            save_markdown_to_file(&json, "test.md")?;
         }
 
         UserCommand::Default => {}
