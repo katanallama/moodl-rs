@@ -6,6 +6,7 @@ mod db;
 mod models;
 mod parser;
 mod ws;
+mod ui;
 
 use {
     crate::models::courses::*,
@@ -13,6 +14,7 @@ use {
     crate::models::secrets::*,
     crate::ws::ApiResponse,
     crate::ws::*,
+    crate::ui::tui::ui,
     anyhow::Result,
     models::course_details::parse_course_json,
     models::course_section::insert_sections,
@@ -67,6 +69,7 @@ async fn main() -> Result<()> {
         UserCommand::Parse => {
             let json = parse_course_json(&conn, 29737)?;
             save_markdown_to_file(&json, "test.md")?;
+            ui()?;
         }
 
         UserCommand::Default => {}

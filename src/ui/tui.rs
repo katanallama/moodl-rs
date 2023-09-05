@@ -1,96 +1,39 @@
 // tui.rs
 //
-use {
-    minimad::{TextTemplate, OwningTemplateExpander},
-    termimad::crossterm::style::Color::*,
-    termimad::*,
-    crate::ui::parser::ParsedModule,
-};
-use std::io::{stdout, Write};
+use std::fs::File;
+use std::io::{self, stdout, Read, Write};
 use termimad::crossterm::{
-    cursor::{ Hide, Show},
-    event::{
-        self,
-        Event,
-        KeyEvent,
-        KeyCode::*,
-    },
+    cursor::{Hide, Show},
+    event::{self, Event, KeyCode::*, KeyEvent},
     queue,
-    terminal::{
-        self,
-        Clear,
-        ClearType,
-        EnterAlternateScreen,
-        LeaveAlternateScreen,
-    },
+    style::Color::*,
+    terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use termimad::*;
 
-#[allow(dead_code)]
-static MODTEMPLATE: &str = r#"
------------
-# ${app-name}
-
-${module-rows
------------
-## ${module-name}
-${module-description}
-}
------------
-"#;
-
-#[allow(dead_code)]
 fn view_area() -> Area {
     let mut area = Area::full_screen();
-    area.pad_for_max_width(120); // we don't want a too wide text column
+    area.pad_for_max_width(120);
     area
 }
 
-#[allow(dead_code)]
-pub fn ui(modules: &[ParsedModule]) -> Result<(), Error> {
-    // fill an expander with data
-    let mut expander = OwningTemplateExpander::new();
-    expander
-        .set("app-name", "ENSE400")
-        .set("app-version", "0.01")
-        .set_md("dynamic", "filled_by_**template**");
-    for module in modules {
-        expander.sub("module-rows")
-            .set("module-name", &module.name)
-            .set_md("module-description", &module.description);
-    }
-    let mut w = stdout(); // we could also have used stderr
+fn run_app(skin: MadSkin, markdown_content: String) -> Result<(), Error> {
+    let mut w = stdout();
     queue!(w, EnterAlternateScreen)?;
     terminal::enable_raw_mode()?;
-    queue!(w, Hide)?; // hiding the cursor
-
-
-    // let template = TextTemplate::from(MODTEMPLATE);
-
-    let (width, _) = terminal_size();
-    let template_md: String = MODTEMPLATE.into();
-    let template = TextTemplate::from(&*template_md);
-    let text = expander.expand(&template);
-    let skin = make_skin();
-
-    let fmt_text = FmtText::from_text(&skin, text, Some(width as usize));
-    // print!("{}", fmt_text);
-
-
-    // let mut view = MadView::from(MD.to_owned(), view_area(), skin);
-    let mut view = MadView::from(fmt_text.to_string().to_owned(), view_area(), skin);
+    queue!(w, Hide)?;
+    let mut view = MadView::from(markdown_content, view_area(), skin);
     loop {
         view.write_on(&mut w)?;
         w.flush()?;
         match event::read() {
-            Ok(Event::Key(KeyEvent{code, ..})) => {
-                match code {
-                    Char('k') => view.try_scroll_lines(-1),
-                    Char('j') => view.try_scroll_lines(1),
-                    PageUp => view.try_scroll_pages(-1),
-                    PageDown => view.try_scroll_pages(1),
-                    _ => break,
-                }
-            }
+            Ok(Event::Key(KeyEvent { code, .. })) => match code {
+                Char('k') => view.try_scroll_lines(-1),
+                Char('j') => view.try_scroll_lines(1),
+                PageUp => view.try_scroll_pages(-1),
+                PageDown => view.try_scroll_pages(1),
+                _ => break,
+            },
             Ok(Event::Resize(..)) => {
                 queue!(w, Clear(ClearType::All))?;
                 view.resize(&view_area());
@@ -99,19 +42,38 @@ pub fn ui(modules: &[ParsedModule]) -> Result<(), Error> {
         }
     }
     terminal::disable_raw_mode()?;
-    queue!(w, Show)?; // we must restore the cursor
+    queue!(w, Show)?;
     queue!(w, LeaveAlternateScreen)?;
     w.flush()?;
     Ok(())
 }
 
+fn read_markdown_file(file_path: &str) -> Result<String, io::Error> {
+    let mut file = File::open(file_path)?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    Ok(contents)
+}
+
+pub fn ui() -> Result<(), Error> {
+    let skin = make_skin();
+
+    match read_markdown_file("test.md") {
+        Ok(md_contents) => run_app(skin, md_contents),
+        Err(e) => {
+            eprintln!("Failed to read markdown file: {}", e);
+            Err(Error::from(e))
+        }
+    }
+}
+
 fn make_skin() -> MadSkin {
     let mut skin = MadSkin::default();
+    skin.table.align = Alignment::Center;
     skin.set_headers_fg(AnsiValue(178));
-    skin.headers[2].set_fg(gray(22));
     skin.bold.set_fg(Yellow);
     skin.italic.set_fg(Magenta);
     skin.scrollbar.thumb.set_fg(AnsiValue(178));
-    // skin.code_block.align = Alignment::Center;
+    skin.code_block.align = Alignment::Center;
     skin
 }
