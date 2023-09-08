@@ -6,7 +6,7 @@ use anyhow::Result;
 use {reqwest, serde::Deserialize, serde::Serialize};
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ApiConfig {
     base_url: String,
     token: String,
@@ -100,7 +100,6 @@ impl ApiClient {
     }
 
     pub fn from_secrets(secrets: &Secrets) -> Result<Self> {
-        // let secrets = secrets::read_secrets(path)?;
         Ok(ApiClient::new(
             &secrets.api.base_url,
             &secrets.api.token,
@@ -116,16 +115,6 @@ impl ApiClient {
             .send()
             .await?;
 
-        // debugging nightmare this is
-        // let sections: Result<Vec<Section>, _> = serde_json::from_str(&response.text().await?);
-        // let sections: Result<Vec<Course>, _> = serde_json::from_str(&response.text().await?);
-        // let sections: Result<Pages, _> = serde_json::from_str(&response.text().await?);
-        // let sections: Result<UserGrade, _> = serde_json::from_str(&response.text().await?);
-        // let sections: Result<Assignments, _> = serde_json::from_str(&response.text().await?);
-        // let responseback = response.text().await?;
-        // println!("{:#?}", responseback);
-        // println!("{:#?}", sections);
-        // Ok("OK".to_string())
         Ok(response.text().await?)
     }
 
