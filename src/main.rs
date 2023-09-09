@@ -2,16 +2,13 @@
 //
 #![allow(dead_code)]
 
-use downloader::save_files;
-use utils::modify_shortname;
-
 mod db;
+mod downloader;
 mod models;
 mod parser;
 mod ui;
 mod utils;
 mod ws;
-mod downloader;
 
 use {
     crate::models::courses::*,
@@ -20,10 +17,12 @@ use {
     // crate::ui::tui::ui,
     crate::ws::*,
     anyhow::Result,
+    downloader::save_files,
     models::course_details::parse_course_json,
     models::course_section::insert_sections,
     parser::save_markdown_to_file,
     termimad::{crossterm::style::Color::*, MadSkin, Question, *},
+    utils::modify_shortname,
 };
 
 enum UserCommand {
@@ -34,10 +33,10 @@ enum UserCommand {
     Default,
 }
 
-const GET_ASSIGNMENTS: &str = "mod_assign_get_assignments";
+const GET_ASSIGNMENTS: &str = "mod_assign_get_assignments"; // TODO implement db
 const GET_CONTENTS: &str = "core_course_get_contents";
 const GET_COURSES: &str = "core_enrol_get_users_courses";
-const GET_GRADES: &str = "gradereport_user_get_grade_items";
+const GET_GRADES: &str = "gradereport_user_get_grade_items"; // TODO implement db
 const GET_PAGES: &str = "mod_page_get_pages_by_courses";
 
 #[tokio::main]
@@ -77,11 +76,8 @@ async fn main() -> Result<()> {
                 if let Some(ref shortname) = course.shortname {
                     let file_path = format!("out/{}", modify_shortname(&shortname));
                     save_markdown_to_file(&json, &file_path)?;
-                } else {
-                    // Handle the case where shortname is None, e.g., log an error or return an Err variant
                 }
             }
-            // ui()?;
         }
         UserCommand::Download => {
             for course in secrets.courses {
@@ -89,13 +85,9 @@ async fn main() -> Result<()> {
                 if let Some(ref shortname) = course.shortname {
                     let file_path = format!("out/{}", modify_shortname(&shortname));
                     save_files(&json, &file_path, &client, &conn).await?;
-                } else {
-                    // Handle the case where shortname is None, e.g., log an error or return an Err variant
                 }
             }
-            // ui()?;
         }
-
         UserCommand::Default => {}
     }
 
@@ -144,19 +136,6 @@ fn prompt_courses(courses: &Vec<Course>, skin: &MadSkin) -> Result<Vec<CourseCon
     Ok(selected_courses)
 }
 
-async fn fetch_course_pages(client: &ApiClient) -> Result<ApiResponse> {
-    let query = QueryParameters::new(client).function(GET_PAGES);
-    client.fetch(query).await
-}
-
-// TODO implement the db stuff for this
-async fn fetch_user_assignments(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
-    let query = QueryParameters::new(client)
-        .function(GET_ASSIGNMENTS)
-        .courseid(course_id);
-    client.fetch(query).await
-}
-
 async fn fetch_course_contents(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
     let query = QueryParameters::new(client)
         .function(GET_CONTENTS)
@@ -168,6 +147,19 @@ async fn fetch_course_contents(client: &ApiClient, course_id: i64) -> Result<Api
 async fn fetch_course_grades(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
     let query = QueryParameters::new(client)
         .function(GET_GRADES)
+        .courseid(course_id);
+    client.fetch(query).await
+}
+
+async fn fetch_course_pages(client: &ApiClient) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client).function(GET_PAGES);
+    client.fetch(query).await
+}
+
+// TODO implement the db stuff for this
+async fn fetch_user_assignments(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client)
+        .function(GET_ASSIGNMENTS)
         .courseid(course_id);
     client.fetch(query).await
 }
