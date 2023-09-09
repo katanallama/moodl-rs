@@ -1,4 +1,6 @@
 .direnv
 /target
+out
 *.db
 *.json
+Secret*.toml

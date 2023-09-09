@@ -19,6 +19,8 @@
     devShells.${system}.default = pkgs.mkShell {
       packages = [
         toolchain
+        pkgs.beekeeper-studio
+        pkgs.sqlite
         pkgs.openssl
         pkgs.pkg-config
         pkgs.rust-analyzer-unwrapped

@@ -1,153 +1,183 @@
 // main.rs
+//
+#![allow(dead_code)]
+
 mod db;
+mod downloader;
 mod models;
-mod process_result;
+mod parser;
+mod ui;
+mod utils;
 mod ws;
 
-use crate::models::user::process_user;
-use clap::Parser;
-use db::{
-    create_course_content_tables, create_user_table, initialize_db, insert_assignments,
-    insert_content, insert_grades, insert_user,
+use {
+    crate::models::courses::*,
+    crate::models::pages::*,
+    crate::models::secrets::*,
+    // crate::ui::tui::ui,
+    crate::ws::*,
+    anyhow::Result,
+    downloader::save_files,
+    models::course_details::parse_course_json,
+    models::course_section::insert_sections,
+    parser::save_markdown_to_file,
+    termimad::{crossterm::style::Color::*, MadSkin, Question, *},
+    utils::modify_shortname,
 };
-use models::course_content::{process_assignments, process_content, process_grades};
-use models::response::CustomError;
-use process_result::ProcessResult;
-use reqwest;
-use std::io::{self, Write};
-use ws::ApiConfig;
 
-#[derive(Parser)]
-struct Cli {
-    #[clap(subcommand)]
-    cmd: Option<Command>,
-}
-
-#[derive(Parser)]
-enum Command {
+enum UserCommand {
     Init,
+    Parse,
+    Fetch,
+    Download,
+    Default,
 }
+
+const GET_ASSIGNMENTS: &str = "mod_assign_get_assignments"; // TODO implement db
+const GET_CONTENTS: &str = "core_course_get_contents";
+const GET_COURSES: &str = "core_enrol_get_users_courses";
+const GET_GRADES: &str = "gradereport_user_get_grade_items"; // TODO implement db
+const GET_PAGES: &str = "mod_page_get_pages_by_courses";
 
 #[tokio::main]
-async fn main() -> Result<(), CustomError> {
-    let args = Cli::parse();
-    let mut conn = initialize_db()?;
+async fn main() -> Result<()> {
+    let skin = make_skin();
+    let command = prompt_command(&skin)?;
 
-    let mut api_config = if let Some(Command::Init) = args.cmd {
-        init(&mut conn)?
-    } else {
-        ApiConfig::get_saved_api_config(&conn)?
-    };
+    let mut conn = db::initialize_db()?;
+    let mut secrets = read_config("Secrets.toml")?;
+    let client = ApiClient::from_secrets(&secrets)?;
 
-    if let Some(Command::Init) = args.cmd {
-        store_user(&mut conn, &mut api_config).await?;
-    } else {
-        create_course_content_tables(&conn)?;
-        store_grades(&mut conn, &mut api_config, 26490).await?;
-        store_assignments(&mut conn, &mut api_config, 26490).await?;
-        store_content(&mut conn, &mut api_config, 26490).await?;
-    };
+    match command {
+        UserCommand::Init => {
+            db::create_tables(&conn)?;
+            let response = fetch_user_courses(&client).await?;
+            if let ApiResponse::Course(course_list) = response {
+                let selected_courses = prompt_courses(&course_list, &skin)?;
+                secrets.write_courses(selected_courses)?;
+            }
+        }
+        UserCommand::Fetch => {
+            for course in secrets.courses {
+                let response = fetch_course_contents(&client, course.id).await?;
+                if let ApiResponse::Sections(mut sections) = response {
+                    insert_sections(&mut conn, &mut sections, course.id)?;
+                }
+            }
 
-    Ok(())
-}
-
-async fn store_grades(
-    conn: &mut rusqlite::Connection,
-    api_config: &mut ApiConfig,
-    course_id: i32,
-) -> Result<(), CustomError> {
-    api_config.courseid = Some(course_id);
-    if let ProcessResult::Grades(grades) = api_config
-        .call_json(conn, "gradereport_user_get_grade_items", process_grades)
-        .await?
-    {
-        insert_grades(conn, &grades)?;
+            let mut response = fetch_course_pages(&client).await?;
+            if let ApiResponse::Pages(ref mut pages) = response {
+                insert_pages(&mut conn, &mut pages.pages)?;
+            }
+        }
+        UserCommand::Parse => {
+            for course in secrets.courses {
+                let json = parse_course_json(&conn, course.id)?;
+                if let Some(ref shortname) = course.shortname {
+                    let file_path = format!("out/{}", modify_shortname(&shortname));
+                    save_markdown_to_file(&json, &file_path)?;
+                }
+            }
+        }
+        UserCommand::Download => {
+            for course in secrets.courses {
+                let json = parse_course_json(&conn, course.id)?;
+                if let Some(ref shortname) = course.shortname {
+                    let file_path = format!("out/{}", modify_shortname(&shortname));
+                    save_files(&json, &file_path, &client, &conn).await?;
+                }
+            }
+        }
+        UserCommand::Default => {}
     }
 
     Ok(())
 }
 
-async fn store_content(
-    conn: &mut rusqlite::Connection,
-    api_config: &mut ApiConfig,
-    course_id: i32,
-) -> Result<(), CustomError> {
-    api_config.userid = None;
-    api_config.courseid = Some(course_id);
-    if let ProcessResult::Content(cont) = api_config
-        .call_json(conn, "core_course_get_contents", process_content)
-        .await?
-    {
-        insert_content(conn, api_config.courseid, &cont)?;
-    }
+fn prompt_command(skin: &MadSkin) -> Result<UserCommand> {
+    let mut q = Question::new("Choose a command to run:");
+    q.add_answer("i", "**I**nit - Initialize user information\n\tEnsure 'Secrets.toml' has your Moodle Mobile Service Key and URL.\n\tThen delete courses you are not interested in from 'Secrets.toml'.");
+    q.add_answer("f", "**F**etch - Fetch course materials");
+    q.add_answer("p", "**P**arse - Parse a course");
+    q.add_answer("D", "**D**ownload - Download a course");
+    q.add_answer("d", "Default - Run the default commands");
+    let a = q.ask(skin)?;
 
-    Ok(())
+    match a.as_str() {
+        "i" => Ok(UserCommand::Init),
+        "f" => Ok(UserCommand::Fetch),
+        "p" => Ok(UserCommand::Parse),
+        "D" => Ok(UserCommand::Download),
+        _ => Ok(UserCommand::Default),
+    }
 }
 
-async fn store_assignments(
-    conn: &mut rusqlite::Connection,
-    api_config: &mut ApiConfig,
-    _course_id: i32,
-) -> Result<(), CustomError> {
-    api_config.courseid = None;
-    api_config.userid = None;
-    if let ProcessResult::Assigns(assigns) = api_config
-        .call_json(conn, "mod_assign_get_assignments", process_assignments)
-        .await?
-    {
-        insert_assignments(conn, &assigns)?;
+fn prompt_courses(courses: &Vec<Course>, skin: &MadSkin) -> Result<Vec<CourseConfig>> {
+    let mut selected_courses = Vec::new();
+
+    for course in courses.iter() {
+        let question = format!(
+            "Track the course *{}*?",
+            course.shortname.as_ref().unwrap_or(&"Unknown".to_string())
+        );
+
+        let mut q = Question::new(&question);
+        q.add_answer('y', "**Y**es, track it");
+        q.add_answer('n', "**N**o, skip it");
+        q.set_default('y');
+
+        let answer = q.ask(skin)?;
+
+        if answer == "y" {
+            selected_courses.push(CourseConfig::from(course));
+        }
     }
 
-    Ok(())
+    Ok(selected_courses)
 }
 
-async fn store_user(
-    conn: &mut rusqlite::Connection,
-    api_config: &mut ApiConfig,
-) -> Result<(), CustomError> {
-    api_config.userid = None;
-    if let ProcessResult::User(user) = api_config
-        .call_json(conn, "core_webservice_get_site_info", process_user)
-        .await?
-    {
-        insert_user(conn, &user, api_config)?;
-    }
-
-    Ok(())
+async fn fetch_course_contents(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client)
+        .function(GET_CONTENTS)
+        .courseid(course_id);
+    client.fetch(query).await
 }
 
-fn init(conn: &mut rusqlite::Connection) -> Result<ApiConfig, CustomError> {
-    create_user_table(conn)?;
-    print!("Moodle Mobile additional features service key : ");
-    io::stdout().flush()?;
-    let mut wstoken = String::new();
-    io::stdin().read_line(&mut wstoken)?;
-    let wstoken = wstoken.trim().to_string();
+// TODO implement the db stuff for this
+async fn fetch_course_grades(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client)
+        .function(GET_GRADES)
+        .courseid(course_id);
+    client.fetch(query).await
+}
 
-    if wstoken.is_empty() {
-        return Err(CustomError::Io(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Moodle key is required!",
-        )));
-    }
+async fn fetch_course_pages(client: &ApiClient) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client).function(GET_PAGES);
+    client.fetch(query).await
+}
 
-    print!("Moodle url (RTN for default) : ");
-    io::stdout().flush()?;
-    let mut url = String::new();
-    io::stdin().read_line(&mut url)?;
-    let url = if url.trim().is_empty() {
-        "https://urcourses.uregina.ca/webservice/rest/server.php".to_string()
-    } else {
-        url.trim().to_string()
-    };
+// TODO implement the db stuff for this
+async fn fetch_user_assignments(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client)
+        .function(GET_ASSIGNMENTS)
+        .courseid(course_id);
+    client.fetch(query).await
+}
 
-    let api_config = ApiConfig {
-        wstoken,
-        courseid: None,
-        userid: None,
-        client: reqwest::Client::new(),
-        url,
-    };
+async fn fetch_user_courses(client: &ApiClient) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client)
+        .function(GET_COURSES)
+        .use_default_userid();
+    client.fetch(query).await
+}
 
-    Ok(api_config)
+fn make_skin() -> MadSkin {
+    let mut skin = MadSkin::default();
+    skin.table.align = Alignment::Center;
+    skin.set_headers_fg(AnsiValue(178));
+    skin.bold.set_fg(Yellow);
+    skin.italic.set_fg(Magenta);
+    skin.scrollbar.thumb.set_fg(AnsiValue(178));
+    skin.code_block.align = Alignment::Center;
+    skin
 }
