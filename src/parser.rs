@@ -2,7 +2,7 @@ use crate::models::course_details::ParseCourseDetails;
 use anyhow::Result;
 use html2md::parse_html;
 use serde_json;
-use std::fs::File as StdFile;
+use std::fs::{self, File as StdFile};
 use std::io::Write;
 
 fn convert_to_markdown(course_details: ParseCourseDetails) -> String {
@@ -33,12 +33,6 @@ fn convert_to_markdown(course_details: ParseCourseDetails) -> String {
 
             // markdown.push_str("#### Contents\n");
             for content in &module.content {
-                // if let Some(filename) = &content.content_filename {
-                //     markdown.push_str(&format!("- Filename: {}\n", filename));
-                // }
-                // if let Some(fileurl) = &content.content_fileurl {
-                //     markdown.push_str(&format!("- File URL: {}\n", fileurl));
-                // }
                 if let Some(content_filename) = &content.content_filename {
                     if let Some(content_fileurl) = &content.content_fileurl {
                         markdown.push_str(&format!("\n[{}]", content_filename));
@@ -81,7 +75,15 @@ pub fn save_markdown_to_file(json_data: &str, file_path: &str) -> Result<()> {
     let parsed_course_details: ParseCourseDetails = serde_json::from_str(json_data)?;
     let markdown_data = convert_to_markdown(parsed_course_details);
 
-    let mut file = StdFile::create(file_path)?;
+    let file_path_with_extension = format!("{}.md", file_path);
+
+    if let Some(parent_dir) = std::path::Path::new(&file_path_with_extension).parent() {
+        if !parent_dir.exists() {
+            fs::create_dir_all(parent_dir)?;
+        }
+    }
+
+    let mut file = StdFile::create(file_path_with_extension)?;
     file.write_all(markdown_data.as_bytes())?;
 
     Ok(())

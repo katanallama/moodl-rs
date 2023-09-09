@@ -14,15 +14,19 @@ pub struct CourseDetails {
     pub module_name: Option<String>,
     pub module_description: Option<String>,
 
+    pub content_id: Option<i64>,
     pub content_filename: Option<String>,
     pub content_fileurl: Option<String>,
+    pub content_localpath: Option<String>,
 
     pub page_name: Option<String>,
     pub page_intro: Option<String>,
     pub page_content: Option<String>,
 
+    pub file_id: Option<i64>,
     pub file_filename: Option<String>,
     pub file_fileurl: Option<String>,
+    pub file_localpath: Option<String>,
 }
 
 // When parsing we will go from
@@ -54,6 +58,7 @@ pub struct ModuleDetails {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ContentDetails {
+    pub content_id: Option<i64>,
     pub content_filename: Option<String>,
     pub content_fileurl: Option<String>,
     pub content_timemodified: Option<String>,
@@ -73,6 +78,7 @@ pub struct PageDetails {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FileDetails {
+    pub file_id: Option<i64>,
     pub file_filename: Option<String>,
     pub file_fileurl: Option<String>,
     pub file_timemodified: Option<String>,
@@ -102,6 +108,7 @@ pub fn get_course_details(conn: &Connection, course_id: i64) -> Result<Vec<Cours
             Content.filename AS content_filename,
             Content.fileurl AS content_fileurl,
             Content.timemodified AS content_timemodified,
+            Content.localpath AS content_localpath,
             Content.lastfetched AS content_lastfetched,
 
             Pages.id AS page_id,
@@ -119,6 +126,7 @@ pub fn get_course_details(conn: &Connection, course_id: i64) -> Result<Vec<Cours
             Files.filename AS file_filename,
             Files.fileurl AS file_fileurl,
             Files.timemodified AS file_timemodified,
+            Files.localpath AS file_localpath,
             Files.lastfetched AS file_lastfetched
 
         FROM Sections
@@ -151,9 +159,10 @@ pub fn get_course_details(conn: &Connection, course_id: i64) -> Result<Vec<Cours
             module_description: row.get("module_description")?,
             // module_lastfetched: row.get("module_lastfetched")?,
 
-            // content_id: row.get("content_id")?,
+            content_id: row.get("content_id")?,
             content_filename: row.get("content_filename")?,
             content_fileurl: row.get("content_fileurl")?,
+            content_localpath: row.get("content_localpath")?,
             // content_timemodified: row.get("content_timemodified")?,
             // content_lastfetched: row.get("content_lastfetched")?,
 
@@ -168,9 +177,10 @@ pub fn get_course_details(conn: &Connection, course_id: i64) -> Result<Vec<Cours
             // page_timemodified: row.get("page_timemodified")?,
             // page_lastfetched: row.get("page_lastfetched")?,
 
-            // file_id: row.get("file_id")?,
+            file_id: row.get("file_id")?,
             file_filename: row.get("file_filename")?,
             file_fileurl: row.get("file_fileurl")?,
+            file_localpath: row.get("file_localpath")?,
             // file_timemodified: row.get("file_timemodified")?,
             // file_lastfetched: row.get("file_lastfetched")?,
         })
@@ -226,6 +236,7 @@ pub fn parse_course_json(conn: &Connection, course_id: i64) -> Result<String> {
         // Add content details if not null
         if detail.content_filename.is_some() || detail.content_fileurl.is_some() {
             module.content.push(ContentDetails {
+                content_id: detail.content_id.clone(),
                 content_filename: detail.content_filename.clone(),
                 content_fileurl: detail.content_fileurl.clone(),
                 content_timemodified: None,
@@ -246,6 +257,7 @@ pub fn parse_course_json(conn: &Connection, course_id: i64) -> Result<String> {
                 page_timemodified: None,
                 page_lastfetched: None,
                 files: vec![FileDetails {
+                    file_id: detail.file_id.clone(),
                     file_filename: detail.file_filename.clone(),
                     file_fileurl: detail.file_filename.clone(),
                     file_timemodified: None,
@@ -256,6 +268,7 @@ pub fn parse_course_json(conn: &Connection, course_id: i64) -> Result<String> {
             // Add file details if not null
             if detail.file_filename.is_some() || detail.file_fileurl.is_some() {
                 new_page.files.push(FileDetails {
+                    file_id: detail.file_id.clone(),
                     file_filename: detail.file_filename.clone(),
                     file_fileurl: detail.file_filename.clone(),
                     file_timemodified: None,

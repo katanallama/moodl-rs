@@ -2,19 +2,23 @@
 //
 #![allow(dead_code)]
 
+use downloader::save_files;
+use utils::modify_shortname;
+
 mod db;
 mod models;
 mod parser;
-mod ws;
 mod ui;
+mod utils;
+mod ws;
+mod downloader;
 
 use {
     crate::models::courses::*,
     crate::models::pages::*,
     crate::models::secrets::*,
-    crate::ws::ApiResponse,
+    // crate::ui::tui::ui,
     crate::ws::*,
-    crate::ui::tui::ui,
     anyhow::Result,
     models::course_details::parse_course_json,
     models::course_section::insert_sections,
@@ -26,6 +30,7 @@ enum UserCommand {
     Init,
     Parse,
     Fetch,
+    Download,
     Default,
 }
 
@@ -41,7 +46,7 @@ async fn main() -> Result<()> {
     let command = prompt_command(&skin)?;
 
     let mut conn = db::initialize_db()?;
-    let mut secrets = read_secrets("Secrets.toml")?;
+    let mut secrets = read_config("Secrets.toml")?;
     let client = ApiClient::from_secrets(&secrets)?;
 
     match command {
@@ -67,9 +72,28 @@ async fn main() -> Result<()> {
             }
         }
         UserCommand::Parse => {
-            let json = parse_course_json(&conn, 29737)?;
-            save_markdown_to_file(&json, "test.md")?;
-            ui()?;
+            for course in secrets.courses {
+                let json = parse_course_json(&conn, course.id)?;
+                if let Some(ref shortname) = course.shortname {
+                    let file_path = format!("out/{}", modify_shortname(&shortname));
+                    save_markdown_to_file(&json, &file_path)?;
+                } else {
+                    // Handle the case where shortname is None, e.g., log an error or return an Err variant
+                }
+            }
+            // ui()?;
+        }
+        UserCommand::Download => {
+            for course in secrets.courses {
+                let json = parse_course_json(&conn, course.id)?;
+                if let Some(ref shortname) = course.shortname {
+                    let file_path = format!("out/{}", modify_shortname(&shortname));
+                    save_files(&json, &file_path, &client, &conn).await?;
+                } else {
+                    // Handle the case where shortname is None, e.g., log an error or return an Err variant
+                }
+            }
+            // ui()?;
         }
 
         UserCommand::Default => {}
@@ -83,6 +107,7 @@ fn prompt_command(skin: &MadSkin) -> Result<UserCommand> {
     q.add_answer("i", "**I**nit - Initialize user information\n\tEnsure 'Secrets.toml' has your Moodle Mobile Service Key and URL.\n\tThen delete courses you are not interested in from 'Secrets.toml'.");
     q.add_answer("f", "**F**etch - Fetch course materials");
     q.add_answer("p", "**P**arse - Parse a course");
+    q.add_answer("D", "**D**ownload - Download a course");
     q.add_answer("d", "Default - Run the default commands");
     let a = q.ask(skin)?;
 
@@ -90,11 +115,12 @@ fn prompt_command(skin: &MadSkin) -> Result<UserCommand> {
         "i" => Ok(UserCommand::Init),
         "f" => Ok(UserCommand::Fetch),
         "p" => Ok(UserCommand::Parse),
+        "D" => Ok(UserCommand::Download),
         _ => Ok(UserCommand::Default),
     }
 }
 
-fn prompt_courses(courses: &Vec<Course>, skin: &MadSkin) -> Result<Vec<CourseSecret>> {
+fn prompt_courses(courses: &Vec<Course>, skin: &MadSkin) -> Result<Vec<CourseConfig>> {
     let mut selected_courses = Vec::new();
 
     for course in courses.iter() {
@@ -111,7 +137,7 @@ fn prompt_courses(courses: &Vec<Course>, skin: &MadSkin) -> Result<Vec<CourseSec
         let answer = q.ask(skin)?;
 
         if answer == "y" {
-            selected_courses.push(CourseSecret::from(course));
+            selected_courses.push(CourseConfig::from(course));
         }
     }
 

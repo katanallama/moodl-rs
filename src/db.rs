@@ -1,10 +1,25 @@
 // db.rs
 //
+// where to store your database, default is your system data directory
+// linux/mac: ~/.local/share/moodl-rs/moodl-rs.db
+// windows: %USERPROFILE%/.local/share/moodl-rs/moodl-rs.db
+
 use anyhow::Result;
 use rusqlite::{Connection, Transaction};
+use crate::utils::*;
+
+use std::fs;
 
 pub fn initialize_db() -> Result<Connection> {
-    let conn = Connection::open("moodl-rs.db")?;
+    let data_directory = data_dir();
+
+    if !data_directory.exists() {
+        fs::create_dir_all(&data_directory)?;
+    }
+
+    let db_path = data_directory.join("moodl-rs.db");
+
+    let conn = Connection::open(db_path)?;
     Ok(conn)
 }
 
@@ -55,6 +70,7 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error>
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             filename TEXT,
             fileurl TEXT,
+            localpath TEXT,
             timemodified DATETIME,
             lastfetched DATETIME,
             module_id INTEGER,
@@ -86,6 +102,7 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error>
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             filename TEXT,
             fileurl TEXT,
+            localpath TEXT,
             timemodified DATETIME,
             lastfetched DATETIME,
             page_id INTEGER,
