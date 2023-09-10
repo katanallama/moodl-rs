@@ -1,12 +1,14 @@
 // downloader.rs
-use crate::models::course_details::ParseCourseDetails;
-use crate::ws::ApiClient;
-use anyhow::Result;
+use crate::{
+    models::course_details::{GetFileData, ParseCourseDetails},
+    ws::ApiClient,
+};
+use eyre::Result;
+use log;
 use regex::Regex;
 use rusqlite::{params, Connection};
 use serde_json;
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path};
 
 pub async fn save_files(
     json_data: &str,
@@ -15,59 +17,73 @@ pub async fn save_files(
     conn: &Connection,
 ) -> Result<()> {
     let parsed_course_details: ParseCourseDetails = serde_json::from_str(json_data)?;
-    // parse_files(parsed_course_details, api_client, &file_path).await?;
+
     for section in parsed_course_details.sections {
         for module in section.modules {
             for content in &module.content {
-                if let Some(content_filename) = &content.content_filename {
-                    if let Some(content_fileurl) = &content.content_fileurl {
-                        let sanitized_file_name = sanitize_filename(content_filename);
-                        let clean_file_path = format!("{}/{}", file_path, sanitized_file_name);
-
-                        create_directory_if_not_exists(&clean_file_path)?;
-                        // TODO fix the error handling here
-                        let _ = api_client
-                            .download_file(content_fileurl, &clean_file_path)
-                            .await;
-                        // .await?;
-
-                        update_file_paths_in_db(
-                            &conn,
-                            "Content",
-                            "id",
-                            content.content_id.unwrap(),
-                            &clean_file_path,
-                        )?;
-                    }
+                if let Some((filename, fileurl)) = content.get_file_data() {
+                    handle_file_operations(
+                        api_client,
+                        conn,
+                        file_path,
+                        "Content",
+                        content.content_id,
+                        filename,
+                        fileurl,
+                    )
+                    .await?;
                 }
             }
 
             for page in &module.pages {
                 for file in &page.files {
-                    if let Some(file_filename) = &file.file_filename {
-                        if let Some(file_fileurl) = &file.file_fileurl {
-                            let sanitized_file_name = sanitize_filename(file_filename);
-                            let clean_file_path = format!("{}/{}", file_path, sanitized_file_name);
-
-                            create_directory_if_not_exists(&clean_file_path)?;
-                            // TODO fix the error handling here
-                            let _ = api_client
-                                .download_file(file_fileurl, &clean_file_path)
-                                .await;
-                            // .await?;
-
-                            update_file_paths_in_db(
-                                &conn,
-                                "Files",
-                                "id",
-                                file.file_id.unwrap(),
-                                &clean_file_path,
-                            )?;
-                        }
+                    if let Some((filename, fileurl)) = file.get_file_data() {
+                        handle_file_operations(
+                            api_client,
+                            conn,
+                            file_path,
+                            "Files",
+                            file.file_id,
+                            filename,
+                            fileurl,
+                        )
+                        .await?;
                     }
                 }
             }
         }
+    }
+
+    Ok(())
+}
+
+async fn handle_file_operations(
+    api_client: &ApiClient,
+    conn: &Connection,
+    file_path: &str,
+    table_name: &str,
+    id_option: Option<i64>,
+    filename: String,
+    fileurl: String,
+) -> Result<()> {
+    if let Some(id) = id_option {
+        let sanitized_file_name = sanitize_filename(&filename);
+        let clean_file_path = format!("{}/{}", file_path, sanitized_file_name);
+
+        match create_directory_if_not_exists(&clean_file_path) {
+            Ok(_) => match api_client.download_file(&fileurl, &clean_file_path).await {
+                Ok(_) => {
+                    match update_file_paths_in_db(conn, table_name, "id", id, &clean_file_path) {
+                        Ok(_) => {}
+                        Err(e) => log::error!("Failed to update DB for {}: {:?}", table_name, e),
+                    }
+                }
+                Err(e) => log::error!("Failed to download file: {:?}", e),
+            },
+            Err(e) => log::error!("Failed to create directory: {:?}", e),
+        }
+    } else {
+        log::error!("ID not found for file: {}", filename);
     }
 
     Ok(())

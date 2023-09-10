@@ -1,6 +1,6 @@
 // models/course_details.rs
 //
-use anyhow::Result;
+use eyre::Result;
 use linked_hash_map::LinkedHashMap;
 use rusqlite::{params, Connection};
 use serde_derive::{Deserialize, Serialize};
@@ -83,6 +83,22 @@ pub struct FileDetails {
     pub file_fileurl: Option<String>,
     pub file_timemodified: Option<String>,
     pub file_lastfetched: Option<String>,
+}
+
+pub trait GetFileData {
+    fn get_file_data(&self) -> Option<(String, String)>;
+}
+
+impl GetFileData for ContentDetails {
+    fn get_file_data(&self) -> Option<(String, String)> {
+        Some((self.content_filename.clone()?, self.content_fileurl.clone()?))
+    }
+}
+
+impl GetFileData for FileDetails {
+    fn get_file_data(&self) -> Option<(String, String)> {
+        Some((self.file_filename.clone()?, self.file_fileurl.clone()?))
+    }
 }
 
 pub fn get_course_details(conn: &Connection, course_id: i64) -> Result<Vec<CourseDetails>> {
@@ -196,6 +212,10 @@ pub fn get_course_details(conn: &Connection, course_id: i64) -> Result<Vec<Cours
 
 pub fn parse_course_json(conn: &Connection, course_id: i64) -> Result<String> {
     let course_details: Vec<CourseDetails> = get_course_details(conn, course_id)?;
+
+    if course_details.is_empty() {
+        return Err(eyre::eyre!("The 'Contents' table is empty, run 'Fetch' command first."));
+    }
 
     let mut section_map: LinkedHashMap<String, SectionDetails> = LinkedHashMap::new();
 

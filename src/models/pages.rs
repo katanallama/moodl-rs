@@ -2,7 +2,7 @@
 //
 use crate::db::generic_insert;
 use crate::db::Insertable;
-use anyhow::Result;
+use eyre::Result;
 use rusqlite::ToSql;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

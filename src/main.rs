@@ -10,17 +10,19 @@ mod ui;
 mod utils;
 mod ws;
 
+use chrono::Local;
 use {
     crate::models::configs::*,
     crate::models::courses::*,
     crate::models::pages::*,
     // crate::ui::tui::ui,
     crate::ws::*,
-    anyhow::Result,
     downloader::save_files,
+    eyre::Result,
     models::course_details::parse_course_json,
     models::course_section::insert_sections,
     parser::save_markdown_to_file,
+    rusqlite::Connection,
     termimad::{crossterm::style::Color::*, MadSkin, Question, *},
     utils::modify_shortname,
 };
@@ -42,8 +44,10 @@ const GET_UID: &str = "core_webservice_get_site_info";
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut config = Configs::new();
-    let mut client = ApiClient::from_config(&config.as_mut().expect("No config found"))?;
+    setup_logger().expect("Failed to initialize logging");
+
+    let config = Configs::new()?;
+    let mut client = ApiClient::from_config(&config)?;
     let mut conn = db::initialize_db()?;
 
     let skin = make_skin();
@@ -52,53 +56,86 @@ async fn main() -> Result<()> {
     match command {
         UserCommand::Init => {
             db::create_tables(&conn)?;
-            let response = fetch_user_id(&client).await?;
-            if let ApiResponse::SiteInfo(info) = response {
-                config.expect("NO UID").write_userid(info.userid)?;
-                config = Ok(read_config("src/config.toml").expect("BAD"));
-                client = ApiClient::from_config(&config.as_mut().expect("Incorrect Config"))?;
-                println!("Userid updated in 'config.toml' to: {}\n", info.userid);
-            }
-            let response = fetch_user_courses(&client).await?;
-            if let ApiResponse::Course(course_list) = response {
-                let selected_courses = prompt_courses(&course_list, &skin)?;
-                config.expect("Cant write courses").write_courses(selected_courses)?;
-            }
+            init_config(&skin, &mut client, config).await?;
         }
         UserCommand::Fetch => {
-            for course in config.expect("No courses").courses {
-                let response = fetch_course_contents(&client, course.id).await?;
-                if let ApiResponse::Sections(mut sections) = response {
-                    insert_sections(&mut conn, &mut sections, course.id)?;
-                }
-            }
-
-            let mut response = fetch_course_pages(&client).await?;
-            if let ApiResponse::Pages(ref mut pages) = response {
-                insert_pages(&mut conn, &mut pages.pages)?;
-            }
+            fetch_command_handler(config, &mut client, &mut conn).await?;
         }
         UserCommand::Parse => {
-            for course in config.expect("No courses").courses {
-                let json = parse_course_json(&conn, course.id)?;
-                if let Some(ref shortname) = course.shortname {
-                    let file_path = format!("out/{}", modify_shortname(&shortname));
-                    save_markdown_to_file(&json, &file_path)?;
-                }
-            }
+            parse_command_handler(config, &conn)?;
         }
         UserCommand::Download => {
-            for course in config.expect("No courses").courses {
-                let json = parse_course_json(&conn, course.id)?;
-                if let Some(ref shortname) = course.shortname {
-                    let file_path = format!("out/{}", modify_shortname(&shortname));
-                    save_files(&json, &file_path, &client, &conn).await?;
-                }
-            }
+            download_command_handler(config, &client, &conn).await?;
         }
         UserCommand::Default => {}
     }
 
+    Ok(())
+}
+
+async fn init_config(
+    skin: &MadSkin,
+    client: &mut ApiClient,
+    mut config: Configs,
+) -> Result<()> {
+    let response = fetch_user_id(client).await?;
+    if let ApiResponse::SiteInfo(info) = response {
+        config.write_userid(info.userid)?;
+        config = read_config("src/config.toml")?;
+        *client = ApiClient::from_config(&config)?;
+    }
+
+    let response = fetch_user_courses(client).await?;
+    if let ApiResponse::Course(course_list) = response {
+        let selected_courses = prompt_courses(&course_list, &skin)?;
+        config.write_courses(selected_courses)?;
+    }
+    // Ok(config)
+    Ok(())
+}
+
+async fn fetch_command_handler(
+    config: Configs,
+    client: &mut ApiClient,
+    conn: &mut Connection,
+) -> Result<()> {
+    for course in config.courses {
+        let response = fetch_course_contents(&client, course.id).await?;
+        if let ApiResponse::Sections(mut sections) = response {
+            insert_sections(conn, &mut sections, course.id)?;
+        }
+    }
+
+    let mut response = fetch_course_pages(&client).await?;
+    if let ApiResponse::Pages(ref mut pages) = response {
+        insert_pages(conn, &mut pages.pages)?;
+    }
+    Ok(())
+}
+
+fn parse_command_handler(config: Configs, conn: &Connection) -> Result<()> {
+    for course in config.courses {
+        let json = parse_course_json(&conn, course.id)?;
+        if let Some(ref shortname) = course.shortname {
+            let file_path = format!("out/{}", modify_shortname(&shortname));
+            save_markdown_to_file(&json, &file_path)?;
+        }
+    }
+    Ok(())
+}
+
+async fn download_command_handler(
+    config: Configs,
+    client: &ApiClient,
+    conn: &Connection,
+) -> Result<()> {
+    for course in config.courses {
+        let json = parse_course_json(&conn, course.id)?;
+        if let Some(ref shortname) = course.shortname {
+            let file_path = format!("out/{}", modify_shortname(&shortname));
+            save_files(&json, &file_path, &client, &conn).await?;
+        }
+    }
     Ok(())
 }
 
@@ -196,4 +233,22 @@ fn make_skin() -> MadSkin {
     skin.italic.set_fg(Magenta);
     skin.scrollbar.thumb.set_fg(AnsiValue(178));
     skin
+}
+
+fn setup_logger() -> Result<(), fern::InitError> {
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{} [{}] [{}] {}",
+                Local::now().format("%H:%M:%S"),
+                record.target(),
+                record.level(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Debug)
+        .level_for("html5ever", log::LevelFilter::Warn)
+        .chain(std::io::stdout())
+        .apply()?;
+    Ok(())
 }
