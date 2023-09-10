@@ -3,11 +3,9 @@
 // where to store your database, default is your system data directory
 // linux/mac: ~/.local/share/moodl-rs/moodl-rs.db
 // windows: %USERPROFILE%/.local/share/moodl-rs/moodl-rs.db
-
-use anyhow::Result;
+use eyre::Result;
 use rusqlite::{Connection, Transaction};
 use crate::utils::*;
-
 use std::fs;
 
 pub fn initialize_db() -> Result<Connection> {
@@ -35,7 +33,7 @@ pub fn generic_insert<T: Insertable>(tx: &Transaction, item: &T) -> Result<()> {
     Ok(())
 }
 
-pub fn create_tables(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
+pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS Sections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
