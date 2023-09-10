@@ -1,5 +1,5 @@
 use crate::models::course_details::ParseCourseDetails;
-use anyhow::Result;
+use eyre::Result;
 use html2md::parse_html;
 use serde_json;
 use std::fs::{self, File as StdFile};
@@ -7,10 +7,6 @@ use std::io::Write;
 
 fn convert_to_markdown(course_details: ParseCourseDetails) -> String {
     let mut markdown = String::new();
-
-    // if let Some(course_id) = course_details.courseid {
-    //     markdown.push_str(&format!("# Course ID: {}\n\n", course_id));
-    // }
 
     for section in course_details.sections {
         if let Some(section_name) = &section.section_name {
@@ -68,6 +64,10 @@ fn convert_to_markdown(course_details: ParseCourseDetails) -> String {
         }
     }
 
+    if let Some(course_id) = course_details.courseid {
+        log::info!("Parsed course {:?}", course_id);
+    }
+
     markdown
 }
 
@@ -88,4 +88,3 @@ pub fn save_markdown_to_file(json_data: &str, file_path: &str) -> Result<()> {
 
     Ok(())
 }
-

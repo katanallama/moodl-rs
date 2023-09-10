@@ -1,18 +1,15 @@
 // ws.rs
 //
-#![allow(dead_code)]
-
 use crate::models::{
-    assignments::Assignments, course_section::Section, courses::Course, grades::UserGrade,
-    pages::Pages, configs::Configs, user::SiteInfo
+    assignments::Assignments, configs::Configs, course_section::Section, courses::Course,
+    grades::UserGrade, pages::Pages, user::SiteInfo,
 };
-use anyhow::Result;
+use eyre::Result;
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::cmp::min;
-use std::fs::File;
-use std::io::Write;
-use {reqwest, serde::Deserialize, serde::Serialize};
+use reqwest;
+use serde::{Deserialize, Serialize};
+use std::{cmp::min, fs::File, io::Write};
 
 pub struct ApiClient {
     base_url: String,
@@ -92,6 +89,7 @@ impl<'a> QueryParameters<'a> {
 
 impl ApiClient {
     pub fn new(base_url: &str, token: &str, userid: &i64) -> Self {
+        log::info!("New API Client created");
         ApiClient {
             base_url: base_url.to_string(),
             wstoken: token.to_string(),
@@ -101,6 +99,7 @@ impl ApiClient {
     }
 
     pub fn from_config(configs: &Configs) -> Result<Self> {
+        log::info!("Using API config from file");
         Ok(ApiClient::new(
             &configs.api.base_url,
             &configs.api.token,
@@ -127,55 +126,47 @@ impl ApiClient {
             .send()
             .await?;
 
-        // println!("{:#?}", response);
         Ok(response.json::<ApiResponse>().await?)
     }
 
-    // TODO error handling
-    pub async fn download_file(&self, url: &str, file_path: &str) -> Result<(), anyhow::Error> {
-    // pub async fn download_file(&self, url: &str, file_path: &str) -> Result<(), String> {
+    pub async fn download_file(&self, url: &str, file_path: &str) -> Result<(), eyre::Report> {
         let url_with_token = format!("{}&token={}", url, self.wstoken);
 
-        // Reqwest setup
-        let res = self.client
+        let res = self
+            .client
             .get(&url_with_token)
             .send()
             .await
-            // .or(Err(format!("Failed to GET from '{}'", &url)))?;
-            .map_err(|_| anyhow::anyhow!("Failed to GET from '{}'", &url))?;
+            .map_err(|_| eyre::eyre!("Failed to GET from '{}'", &url))?;
 
         let total_size = res
             .content_length()
-            // .ok_or(format!("Failed to get content length from '{}'", &url))?;
-            .ok_or_else(|| anyhow::anyhow!("Failed to get content length from '{}'", &url))?;
+            .ok_or_else(|| eyre::eyre!("Failed to get content length from '{}'", &url))?;
 
-        // Indicatif setup
         let pb = ProgressBar::new(total_size);
-        pb.set_style(ProgressStyle::default_bar()
-            .template("{msg}\n{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
-            .progress_chars("#>-"));
-        pb.set_message(&format!("\nDownloading {}", url));
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("[{wide_bar:.cyan/blue}] {bytes}/{total_bytes}")
+                .progress_chars("#>-"),
+        );
 
-        // Download chunks
-        let mut file =
-            // File::create(file_path).or(Err(format!("Failed to create file '{}'", file_path)))?;
-            File::create(file_path).map_err(|_| anyhow::anyhow!("Failed to create file '{}'", file_path))?;
+        let mut file = File::create(file_path)
+            .map_err(|_| eyre::eyre!("Failed to create file '{}'", file_path))?;
 
         let mut downloaded: u64 = 0;
         let mut stream = res.bytes_stream();
 
         while let Some(item) = stream.next().await {
-            // let chunk = item.or(Err(format!("Error while downloading file")))?;
-            let chunk = item.map_err(|_| anyhow::anyhow!("Error while downloading file"))?;
+            let chunk = item.map_err(|_| eyre::eyre!("Error while downloading file"))?;
             file.write_all(&chunk)
-                // .or(Err(format!("Error while writing to file")))?;
-                .map_err(|_| anyhow::anyhow!("Error while writing to file"))?;
+                .map_err(|_| eyre::eyre!("Error while writing to file"))?;
             let new = min(downloaded + (chunk.len() as u64), total_size);
             downloaded = new;
             pb.set_position(new);
         }
 
-        pb.finish_with_message(&format!("Downloaded to {}", file_path));
+        pb.finish();
+        log::info!("Downloaded file {:?}", file_path);
         Ok(())
     }
 }

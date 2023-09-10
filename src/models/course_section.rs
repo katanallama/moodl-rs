@@ -2,7 +2,7 @@
 //
 use crate::db::generic_insert;
 use crate::db::Insertable;
-use anyhow::Result;
+use eyre::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
