@@ -1,0 +1,26 @@
+## config.toml
+## This holds the default configuration for moodl-rs
+## Update this with your own information
+
+## API
+## The base_url and token are required before starting
+## initilization will fetch your userid
+
+[api]
+base_url = "https://your.site.com/webservice/rest/server.php"
+token = "12345x7rb2n3456zo1i6ai8nquh5j18c"
+userid = 123456
+
+## Courses
+## The id and shortname will be updated with your new courselist
+## once you initialize the database, then the path can be updated
+
+[[courses]]
+id = 1
+shortname = "ONE"
+path = "home/user/course-path"
+
+[[courses]]
+id = 2
+shortname = "TWO"
+path = "home/user/course-path"

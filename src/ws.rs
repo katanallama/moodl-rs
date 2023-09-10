@@ -1,9 +1,10 @@
 // ws.rs
+//
 #![allow(dead_code)]
 
 use crate::models::{
     assignments::Assignments, course_section::Section, courses::Course, grades::UserGrade,
-    pages::Pages, secrets::Secrets,
+    pages::Pages, configs::Configs, user::SiteInfo
 };
 use anyhow::Result;
 use futures_util::StreamExt;
@@ -12,13 +13,6 @@ use std::cmp::min;
 use std::fs::File;
 use std::io::Write;
 use {reqwest, serde::Deserialize, serde::Serialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ApiConfig {
-    base_url: String,
-    token: String,
-    userid: i64,
-}
 
 pub struct ApiClient {
     base_url: String,
@@ -30,6 +24,7 @@ pub struct ApiClient {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ApiResponse {
+    SiteInfo(SiteInfo),
     Sections(Vec<Section>),
     Course(Vec<Course>),
     UserGrades(UserGradesResponse),
@@ -105,11 +100,11 @@ impl ApiClient {
         }
     }
 
-    pub fn from_secrets(secrets: &Secrets) -> Result<Self> {
+    pub fn from_config(configs: &Configs) -> Result<Self> {
         Ok(ApiClient::new(
-            &secrets.api.base_url,
-            &secrets.api.token,
-            &secrets.api.userid,
+            &configs.api.base_url,
+            &configs.api.token,
+            &configs.api.userid,
         ))
     }
 
@@ -136,11 +131,12 @@ impl ApiClient {
         Ok(response.json::<ApiResponse>().await?)
     }
 
+    // TODO error handling
     pub async fn download_file(&self, url: &str, file_path: &str) -> Result<(), anyhow::Error> {
     // pub async fn download_file(&self, url: &str, file_path: &str) -> Result<(), String> {
         let url_with_token = format!("{}&token={}", url, self.wstoken);
 
-        // // Reqwest setup
+        // Reqwest setup
         let res = self.client
             .get(&url_with_token)
             .send()
