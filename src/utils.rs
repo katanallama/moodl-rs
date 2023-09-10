@@ -1,6 +1,6 @@
 use std::path::PathBuf;
-use std::fs;
-use std::io;
+// use std::fs;
+// use std::io;
 
 #[cfg(not(target_os = "windows"))]
 pub fn home_dir() -> PathBuf {

@@ -1,6 +1,6 @@
 // downloader.rs
 use crate::models::course_details::ParseCourseDetails;
-use crate::utils::home_dir;
+// use crate::utils::home_dir;
 use crate::ws::ApiClient;
 use anyhow::Result;
 use regex::Regex;
@@ -26,10 +26,11 @@ pub async fn save_files(
                         let clean_file_path = format!("{}/{}", file_path, sanitized_file_name);
 
                         create_directory_if_not_exists(&clean_file_path)?;
-                        api_client
+                        // TODO fix the error handling here
+                        let _ = api_client
                             .download_file(content_fileurl, &clean_file_path)
                             .await;
-                            // .await?;
+                        // .await?;
 
                         update_file_paths_in_db(
                             &conn,
@@ -50,10 +51,11 @@ pub async fn save_files(
                             let clean_file_path = format!("{}/{}", file_path, sanitized_file_name);
 
                             create_directory_if_not_exists(&clean_file_path)?;
-                            api_client
+                            // TODO fix the error handling here
+                            let _ = api_client
                                 .download_file(file_fileurl, &clean_file_path)
                                 .await;
-                                // .await?;
+                            // .await?;
 
                             update_file_paths_in_db(
                                 &conn,

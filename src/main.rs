@@ -11,9 +11,9 @@ mod utils;
 mod ws;
 
 use {
+    crate::models::configs::*,
     crate::models::courses::*,
     crate::models::pages::*,
-    crate::models::secrets::*,
     // crate::ui::tui::ui,
     crate::ws::*,
     anyhow::Result,
@@ -38,27 +38,35 @@ const GET_CONTENTS: &str = "core_course_get_contents";
 const GET_COURSES: &str = "core_enrol_get_users_courses";
 const GET_GRADES: &str = "gradereport_user_get_grade_items"; // TODO implement db
 const GET_PAGES: &str = "mod_page_get_pages_by_courses";
+const GET_UID: &str = "core_webservice_get_site_info";
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let mut config = Configs::new();
+    let mut client = ApiClient::from_config(&config.as_mut().expect("No config found"))?;
+    let mut conn = db::initialize_db()?;
+
     let skin = make_skin();
     let command = prompt_command(&skin)?;
-
-    let mut conn = db::initialize_db()?;
-    let mut secrets = read_config("Secrets.toml")?;
-    let client = ApiClient::from_secrets(&secrets)?;
 
     match command {
         UserCommand::Init => {
             db::create_tables(&conn)?;
+            let response = fetch_user_id(&client).await?;
+            if let ApiResponse::SiteInfo(info) = response {
+                config.expect("NO UID").write_userid(info.userid)?;
+                config = Ok(read_config("src/config.toml").expect("BAD"));
+                client = ApiClient::from_config(&config.as_mut().expect("Incorrect Config"))?;
+                println!("Userid updated in 'config.toml' to: {}\n", info.userid);
+            }
             let response = fetch_user_courses(&client).await?;
             if let ApiResponse::Course(course_list) = response {
                 let selected_courses = prompt_courses(&course_list, &skin)?;
-                secrets.write_courses(selected_courses)?;
+                config.expect("Cant write courses").write_courses(selected_courses)?;
             }
         }
         UserCommand::Fetch => {
-            for course in secrets.courses {
+            for course in config.expect("No courses").courses {
                 let response = fetch_course_contents(&client, course.id).await?;
                 if let ApiResponse::Sections(mut sections) = response {
                     insert_sections(&mut conn, &mut sections, course.id)?;
@@ -71,7 +79,8 @@ async fn main() -> Result<()> {
             }
         }
         UserCommand::Parse => {
-            for course in secrets.courses {
+            // for course in config.courses {
+            for course in config.expect("No courses").courses {
                 let json = parse_course_json(&conn, course.id)?;
                 if let Some(ref shortname) = course.shortname {
                     let file_path = format!("out/{}", modify_shortname(&shortname));
@@ -80,7 +89,8 @@ async fn main() -> Result<()> {
             }
         }
         UserCommand::Download => {
-            for course in secrets.courses {
+            // for course in config.courses {
+            for course in config.expect("No courses").courses {
                 let json = parse_course_json(&conn, course.id)?;
                 if let Some(ref shortname) = course.shortname {
                     let file_path = format!("out/{}", modify_shortname(&shortname));
@@ -96,7 +106,11 @@ async fn main() -> Result<()> {
 
 fn prompt_command(skin: &MadSkin) -> Result<UserCommand> {
     let mut q = Question::new("Choose a command to run:");
-    q.add_answer("i", "**I**nit - Initialize user information\n\tEnsure 'Secrets.toml' has your Moodle Mobile Service Key and URL.\n\tThen delete courses you are not interested in from 'Secrets.toml'.");
+    q.add_answer(
+        "i",
+        "**I**nit - Initialize user information
+        Ensure 'config.toml' has your Moodle Mobile Service Key and URL.",
+    );
     q.add_answer("f", "**F**etch - Fetch course materials");
     q.add_answer("p", "**P**arse - Parse a course");
     q.add_answer("D", "**D**ownload - Download a course");
@@ -171,6 +185,11 @@ async fn fetch_user_courses(client: &ApiClient) -> Result<ApiResponse> {
     client.fetch(query).await
 }
 
+async fn fetch_user_id(client: &ApiClient) -> Result<ApiResponse> {
+    let query = QueryParameters::new(client).function(GET_UID);
+    client.fetch(query).await
+}
+
 fn make_skin() -> MadSkin {
     let mut skin = MadSkin::default();
     skin.table.align = Alignment::Center;
@@ -178,6 +197,6 @@ fn make_skin() -> MadSkin {
     skin.bold.set_fg(Yellow);
     skin.italic.set_fg(Magenta);
     skin.scrollbar.thumb.set_fg(AnsiValue(178));
-    skin.code_block.align = Alignment::Center;
+    // skin.code_block.align = Alignment::Center;
     skin
 }
