@@ -1,6 +1,5 @@
 // downloader.rs
 use crate::models::course_details::ParseCourseDetails;
-// use crate::utils::home_dir;
 use crate::ws::ApiClient;
 use anyhow::Result;
 use regex::Regex;

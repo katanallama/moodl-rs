@@ -79,7 +79,6 @@ async fn main() -> Result<()> {
             }
         }
         UserCommand::Parse => {
-            // for course in config.courses {
             for course in config.expect("No courses").courses {
                 let json = parse_course_json(&conn, course.id)?;
                 if let Some(ref shortname) = course.shortname {
@@ -89,7 +88,6 @@ async fn main() -> Result<()> {
             }
         }
         UserCommand::Download => {
-            // for course in config.courses {
             for course in config.expect("No courses").courses {
                 let json = parse_course_json(&conn, course.id)?;
                 if let Some(ref shortname) = course.shortname {
@@ -197,6 +195,5 @@ fn make_skin() -> MadSkin {
     skin.bold.set_fg(Yellow);
     skin.italic.set_fg(Magenta);
     skin.scrollbar.thumb.set_fg(AnsiValue(178));
-    // skin.code_block.align = Alignment::Center;
     skin
 }
