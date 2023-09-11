@@ -1,6 +1,7 @@
 // downloader.rs
 use crate::{
     models::course_details::{GetFileData, ParseCourseDetails},
+    utils::create_dir,
     ws::ApiClient,
 };
 use eyre::Result;
@@ -8,7 +9,6 @@ use log;
 use regex::Regex;
 use rusqlite::{params, Connection};
 use serde_json;
-use std::{fs, path::Path};
 
 pub async fn save_files(
     json_data: &str,
@@ -70,7 +70,7 @@ async fn handle_file_operations(
         let sanitized_file_name = sanitize_filename(&filename);
         let clean_file_path = format!("{}/{}", file_path, sanitized_file_name);
 
-        match create_directory_if_not_exists(&clean_file_path) {
+        match create_dir(&clean_file_path) {
             Ok(_) => match api_client.download_file(&fileurl, &clean_file_path).await {
                 Ok(_) => {
                     match update_file_paths_in_db(conn, table_name, "id", id, &clean_file_path) {
@@ -86,16 +86,6 @@ async fn handle_file_operations(
         log::error!("ID not found for file: {}", filename);
     }
 
-    Ok(())
-}
-
-fn create_directory_if_not_exists(file_path: &str) -> Result<()> {
-    let path = Path::new(file_path);
-    if let Some(parent_path) = path.parent() {
-        if !parent_path.exists() {
-            fs::create_dir_all(parent_path)?;
-        }
-    }
     Ok(())
 }
 

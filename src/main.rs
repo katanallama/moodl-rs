@@ -10,13 +10,14 @@ mod ui;
 mod utils;
 mod ws;
 
-use chrono::Local;
 use {
     crate::models::configs::*,
     crate::models::courses::*,
     crate::models::pages::*,
     // crate::ui::tui::ui,
     crate::ws::*,
+    crate::db::*,
+    chrono::Local,
     downloader::save_files,
     eyre::Result,
     models::course_details::parse_course_json,
@@ -45,26 +46,39 @@ const GET_UID: &str = "core_webservice_get_site_info";
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_logger().expect("Failed to initialize logging");
+    initialize_db()?;
 
-    let config = Configs::new()?;
-    let mut client = ApiClient::from_config(&config)?;
-    let mut conn = db::initialize_db()?;
-
+    let mut config = Configs::new()?;
     let skin = make_skin();
     let command = prompt_command(&skin)?;
 
+    let mut client;
     match command {
         UserCommand::Init => {
+            let conn = connect_db()?;
             db::create_tables(&conn)?;
-            init_config(&skin, &mut client, config).await?;
+
+            config.prompt_config(&skin).await?;
+
+            client = ApiClient::from_config(&config)?;
+            let userid = get_userid(&mut client).await?;
+            config.write_userid(userid)?;
+
+            client = ApiClient::from_config(&config)?;
+            get_courses(&skin, &mut client, &mut config).await?;
         }
         UserCommand::Fetch => {
+            let mut conn = connect_db()?;
+            client = ApiClient::from_config(&config)?;
             fetch_command_handler(config, &mut client, &mut conn).await?;
         }
         UserCommand::Parse => {
-            parse_command_handler(config, &conn)?;
+            let conn = connect_db()?;
+            parse_command_handler(config, &conn).await?;
         }
         UserCommand::Download => {
+            let conn = connect_db()?;
+            client = ApiClient::from_config(&config)?;
             download_command_handler(config, &client, &conn).await?;
         }
         UserCommand::Default => {}
@@ -73,24 +87,24 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn init_config(
-    skin: &MadSkin,
-    client: &mut ApiClient,
-    mut config: Configs,
-) -> Result<()> {
+pub async fn get_userid(client: &mut ApiClient) -> Result<i64> {
     let response = fetch_user_id(client).await?;
     if let ApiResponse::SiteInfo(info) = response {
-        config.write_userid(info.userid)?;
-        config = read_config("src/config.toml")?;
-        *client = ApiClient::from_config(&config)?;
+        return Ok(info.userid);
     }
+    Err(eyre::eyre!("Unexpected API response"))
+}
 
+async fn get_courses(skin: &MadSkin, client: &mut ApiClient, config: &mut Configs) -> Result<()> {
     let response = fetch_user_courses(client).await?;
+
     if let ApiResponse::Course(course_list) = response {
         let selected_courses = prompt_courses(&course_list, &skin)?;
         config.write_courses(selected_courses)?;
+    } else {
+        return Err(eyre::eyre!("Unexpected API response: {:?}", response));
     }
-    // Ok(config)
+
     Ok(())
 }
 
@@ -113,7 +127,7 @@ async fn fetch_command_handler(
     Ok(())
 }
 
-fn parse_command_handler(config: Configs, conn: &Connection) -> Result<()> {
+async fn parse_command_handler(config: Configs, conn: &Connection) -> Result<()> {
     for course in config.courses {
         let json = parse_course_json(&conn, course.id)?;
         if let Some(ref shortname) = course.shortname {

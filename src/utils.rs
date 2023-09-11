@@ -1,4 +1,8 @@
+// utils.rs
+//
+use eyre::Result;
 use std::path::PathBuf;
+use std::{fs, path::Path};
 // use std::fs;
 // use std::io;
 
@@ -27,6 +31,16 @@ pub fn data_dir() -> PathBuf {
     data_dir.join("moodl-rs")
 }
 
+pub fn create_dir(file_path: &str) -> Result<()> {
+    let path = Path::new(file_path);
+    if let Some(parent_path) = path.parent() {
+        if !parent_path.exists() {
+            fs::create_dir_all(parent_path)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn modify_shortname(shortname: &str) -> String {
     let re = regex::Regex::new(r"(?i)([a-z]+)\s*(\d+)(?:\s*(lab|l))?").unwrap();
     if let Some(caps) = re.captures(shortname) {
@@ -38,4 +52,3 @@ pub fn modify_shortname(shortname: &str) -> String {
     }
     shortname.to_string()
 }
-

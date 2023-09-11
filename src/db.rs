@@ -3,21 +3,29 @@
 // where to store your database, default is your system data directory
 // linux/mac: ~/.local/share/moodl-rs/moodl-rs.db
 // windows: %USERPROFILE%/.local/share/moodl-rs/moodl-rs.db
-use eyre::Result;
-use rusqlite::{Connection, Transaction};
 use crate::utils::*;
+use eyre::{Result, WrapErr};
+use rusqlite::{Connection, Transaction};
 use std::fs;
 
-pub fn initialize_db() -> Result<Connection> {
+pub fn initialize_db() -> Result<()> {
     let data_directory = data_dir();
 
     if !data_directory.exists() {
-        fs::create_dir_all(&data_directory)?;
+        fs::create_dir_all(&data_directory).wrap_err("Failed to create data directory")?;
     }
 
     let db_path = data_directory.join("moodl-rs.db");
 
-    let conn = Connection::open(db_path)?;
+    let conn = Connection::open(db_path).wrap_err("Failed to open connection to the database")?;
+    create_tables(&conn).wrap_err("Failed to create tables in the database")?;
+
+    Ok(())
+}
+
+pub fn connect_db() -> Result<Connection> {
+    let db_path = data_dir().join("moodl-rs.db");
+    let conn = Connection::open(db_path).wrap_err("Failed to connect to the database")?;
     Ok(conn)
 }
 
@@ -27,9 +35,20 @@ pub trait Insertable {
 }
 
 pub fn generic_insert<T: Insertable>(tx: &Transaction, item: &T) -> Result<()> {
-    let mut stmt = tx.prepare(T::insert_query())?;
+    let mut stmt = tx
+        .prepare(T::insert_query())
+        .wrap_err_with(|| format!("Failed to prepare query: {}", T::insert_query()))?;
+
     let params = item.bind_parameters();
-    stmt.execute(&params[..])?;
+    stmt.execute(&params[..]).wrap_err_with(|| {
+        let param_keys = params
+            .iter()
+            .map(|(k, _)| k.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("Failed to execute query with parameters: {}", param_keys)
+    })?;
+
     Ok(())
 }
 
@@ -45,7 +64,8 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
             UNIQUE(sectionid)
         );",
         (),
-    )?;
+    )
+    .wrap_err("Failed to create Sections table")?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS Modules (
@@ -61,7 +81,8 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
             FOREIGN KEY (section_id) REFERENCES Sections(sectionid)
         );",
         (),
-    )?;
+    )
+    .wrap_err("Failed to create Modules table")?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS Content (
@@ -76,7 +97,8 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
             FOREIGN KEY (module_id) REFERENCES Modules(moduleid)
         );",
         (),
-    )?;
+    )
+    .wrap_err("Failed to create Content table")?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS Pages (
@@ -93,7 +115,8 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
             UNIQUE(pageid)
         );",
         (),
-    )?;
+    )
+    .wrap_err("Failed to create Pages table")?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS Files (
@@ -108,7 +131,8 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
             FOREIGN KEY (page_id) REFERENCES Pages(pageid)
         );",
         (),
-    )?;
+    )
+    .wrap_err("Failed to create Files table")?;
 
     Ok(())
 }

@@ -21,13 +21,13 @@ pub struct ApiClient {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ApiResponse {
+    Exception(ApiError),
     SiteInfo(SiteInfo),
     Sections(Vec<Section>),
     Course(Vec<Course>),
     UserGrades(UserGradesResponse),
     Pages(Pages),
     Assignments(Assignments),
-    Exception(ApiError),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -100,6 +100,9 @@ impl ApiClient {
 
     pub fn from_config(configs: &Configs) -> Result<Self> {
         log::info!("Using API config from file");
+        log::debug!("Base url from config: {}", configs.api.base_url);
+        log::debug!("Token from config: {}", configs.api.token);
+        log::debug!("UserID from config: {}", configs.api.userid);
         Ok(ApiClient::new(
             &configs.api.base_url,
             &configs.api.token,
@@ -126,7 +129,18 @@ impl ApiClient {
             .send()
             .await?;
 
-        Ok(response.json::<ApiResponse>().await?)
+        let response_text = response.text().await?;
+
+        // First, try to parse the response as an ApiError
+        if let Ok(api_error) = serde_json::from_str::<ApiError>(&response_text) {
+            return Err(eyre::eyre!("API Error: {:?}", api_error));
+        }
+
+        // If parsing as ApiError failed, try to parse it as an ApiResponse
+        match serde_json::from_str::<ApiResponse>(&response_text) {
+            Ok(api_response) => Ok(api_response),
+            Err(_) => Err(eyre::eyre!("Failed to parse API response")),
+        }
     }
 
     pub async fn download_file(&self, url: &str, file_path: &str) -> Result<(), eyre::Report> {
