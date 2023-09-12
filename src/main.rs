@@ -2,6 +2,7 @@
 //
 mod db;
 mod downloader;
+mod handlers;
 mod models;
 mod parser;
 mod ui;
@@ -10,20 +11,13 @@ mod ws;
 
 use {
     crate::db::*,
-    crate::models::{
-        configs::*, course_details::parse_course_json, course_section::insert_sections, courses::*,
-        pages::*,
-    },
-    // crate::ui::tui::ui,
-    crate::ws::*,
+    crate::handlers::*,
+    crate::models::{configs::*, courses::*},
     crate::utils::*,
-    downloader::save_files,
-    parser::save_markdown_to_file,
-    utils::modify_shortname,
+    crate::ws::*,
 };
 use {
     eyre::Result,
-    rusqlite::Connection,
     termimad::{MadSkin, Question},
 };
 
@@ -62,7 +56,8 @@ async fn main() -> Result<()> {
         UserCommand::Fetch => {
             let mut conn = connect_db()?;
             client = ApiClient::from_config(&config)?;
-            fetch_command_handler(config, &mut client, &mut conn).await?;
+            fetch_course_handler(config, &mut client, &mut conn).await?;
+            fetch_page_handler(&mut client, &mut conn).await?;
         }
         UserCommand::Parse => {
             let conn = connect_db()?;
@@ -76,72 +71,6 @@ async fn main() -> Result<()> {
         UserCommand::Default => {}
     }
 
-    Ok(())
-}
-
-pub async fn get_userid(client: &mut ApiClient) -> Result<i64> {
-    let response = client.fetch_user_id().await?;
-    if let ApiResponse::SiteInfo(info) = response {
-        return Ok(info.userid);
-    }
-    Err(eyre::eyre!("Unexpected API response"))
-}
-
-async fn get_courses(skin: &MadSkin, client: &mut ApiClient, config: &mut Configs) -> Result<()> {
-    let response = client.fetch_user_courses().await?;
-
-    if let ApiResponse::Course(course_list) = response {
-        let selected_courses = prompt_courses(&course_list, &skin)?;
-        config.write_courses(selected_courses)?;
-    } else {
-        return Err(eyre::eyre!("Unexpected API response: {:?}", response));
-    }
-
-    Ok(())
-}
-
-async fn fetch_command_handler(
-    config: Configs,
-    client: &mut ApiClient,
-    conn: &mut Connection,
-) -> Result<()> {
-    for course in config.courses {
-        let response = client.fetch_course_contents(course.id).await?;
-        if let ApiResponse::Sections(mut sections) = response {
-            insert_sections(conn, &mut sections, course.id)?;
-        }
-    }
-
-    let mut response = client.fetch_course_pages().await?;
-    if let ApiResponse::Pages(ref mut pages) = response {
-        insert_pages(conn, &mut pages.pages)?;
-    }
-    Ok(())
-}
-
-async fn parse_command_handler(config: Configs, conn: &Connection) -> Result<()> {
-    for course in config.courses {
-        let json = parse_course_json(&conn, course.id)?;
-        if let Some(ref shortname) = course.shortname {
-            let file_path = format!("out/{}", modify_shortname(&shortname));
-            save_markdown_to_file(&json, &file_path)?;
-        }
-    }
-    Ok(())
-}
-
-async fn download_command_handler(
-    config: Configs,
-    client: &ApiClient,
-    conn: &Connection,
-) -> Result<()> {
-    for course in config.courses {
-        let json = parse_course_json(&conn, course.id)?;
-        if let Some(ref shortname) = course.shortname {
-            let file_path = format!("out/{}", modify_shortname(&shortname));
-            save_files(&json, &file_path, &client, &conn).await?;
-        }
-    }
     Ok(())
 }
 
@@ -190,4 +119,3 @@ fn prompt_courses(courses: &Vec<Course>, skin: &MadSkin) -> Result<Vec<CourseCon
 
     Ok(selected_courses)
 }
-
