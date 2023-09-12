@@ -1,10 +1,13 @@
 // utils.rs
 //
 use eyre::Result;
+use fern::InitError;
 use std::path::PathBuf;
 use std::{fs, path::Path};
-// use std::fs;
-// use std::io;
+use {
+    chrono::Local,
+    termimad::{crossterm::style::Color::*, MadSkin, *},
+};
 
 #[cfg(not(target_os = "windows"))]
 pub fn home_dir() -> PathBuf {
@@ -51,4 +54,32 @@ pub fn modify_shortname(shortname: &str) -> String {
         return result;
     }
     shortname.to_string()
+}
+
+pub fn make_skin() -> MadSkin {
+    let mut skin = MadSkin::default();
+    skin.table.align = Alignment::Center;
+    skin.set_headers_fg(AnsiValue(178));
+    skin.bold.set_fg(Yellow);
+    skin.italic.set_fg(Magenta);
+    skin.scrollbar.thumb.set_fg(AnsiValue(178));
+    skin
+}
+
+pub fn setup_logger() -> Result<(), InitError> {
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{} [{}] [{}] {}",
+                Local::now().format("%H:%M:%S"),
+                record.target(),
+                record.level(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Debug)
+        .level_for("html5ever", log::LevelFilter::Warn)
+        .chain(std::io::stdout())
+        .apply()?;
+    Ok(())
 }

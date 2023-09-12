@@ -10,20 +10,21 @@ mod ws;
 
 use {
     crate::db::*,
-    crate::models::configs::*,
-    crate::models::courses::*,
-    crate::models::pages::*,
+    crate::models::{
+        configs::*, course_details::parse_course_json, course_section::insert_sections, courses::*,
+        pages::*,
+    },
     // crate::ui::tui::ui,
     crate::ws::*,
-    chrono::Local,
+    crate::utils::*,
     downloader::save_files,
-    eyre::Result,
-    models::course_details::parse_course_json,
-    models::course_section::insert_sections,
     parser::save_markdown_to_file,
-    rusqlite::Connection,
-    termimad::{crossterm::style::Color::*, MadSkin, Question, *},
     utils::modify_shortname,
+};
+use {
+    eyre::Result,
+    rusqlite::Connection,
+    termimad::{MadSkin, Question},
 };
 
 enum UserCommand {
@@ -190,30 +191,3 @@ fn prompt_courses(courses: &Vec<Course>, skin: &MadSkin) -> Result<Vec<CourseCon
     Ok(selected_courses)
 }
 
-fn make_skin() -> MadSkin {
-    let mut skin = MadSkin::default();
-    skin.table.align = Alignment::Center;
-    skin.set_headers_fg(AnsiValue(178));
-    skin.bold.set_fg(Yellow);
-    skin.italic.set_fg(Magenta);
-    skin.scrollbar.thumb.set_fg(AnsiValue(178));
-    skin
-}
-
-fn setup_logger() -> Result<(), fern::InitError> {
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{} [{}] [{}] {}",
-                Local::now().format("%H:%M:%S"),
-                record.target(),
-                record.level(),
-                message
-            ))
-        })
-        .level(log::LevelFilter::Debug)
-        .level_for("html5ever", log::LevelFilter::Warn)
-        .chain(std::io::stdout())
-        .apply()?;
-    Ok(())
-}
