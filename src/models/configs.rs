@@ -1,16 +1,14 @@
 // models/configs.rs
 //
-use crate::utils::config_dir;
-use crate::utils::create_dir;
-use crate::utils::modify_shortname;
-use config::{Config, File};
-use eyre::{Result, WrapErr};
-use serde::{Deserialize, Serialize};
-use std::fs;
-use std::io;
-use std::path::Path;
-use termimad::{MadSkin, Question};
-use toml;
+use crate::utils::{config_dir, create_dir, modify_shortname};
+use {
+    config::{Config, File},
+    eyre::{Result, WrapErr},
+    serde::{Deserialize, Serialize},
+    std::{fs, io, path::Path},
+    termimad::{MadSkin, Question},
+    toml,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Configs {
@@ -25,26 +23,10 @@ pub struct ApiConfig {
     pub userid: i64,
 }
 
-impl ApiConfig {
-    pub fn new(base_url: String, token: String, userid: i64) -> Self {
-        Self {
-            base_url,
-            token,
-            userid,
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CourseConfig {
     pub id: i64,
     pub shortname: Option<String>,
-}
-
-impl CourseConfig {
-    pub fn new(id: i64, shortname: Option<String>) -> Self {
-        Self { id, shortname }
-    }
 }
 
 impl From<&crate::Course> for CourseConfig {
@@ -72,13 +54,6 @@ impl Configs {
         let s = Config::builder()
             .add_source(File::from(config_path))
             .build()?;
-
-        log::info!(
-            "\napi - base_url: {:?} \napi - token: {:?}\napi - userid: {:?}",
-            s.get::<String>("api.base_url"),
-            s.get::<String>("api.token"),
-            s.get::<String>("api.userid")
-        );
 
         Ok(s.try_deserialize()?)
     }
@@ -146,7 +121,6 @@ impl Configs {
         io::stdin().read_line(&mut input)?;
         Ok(input.trim().to_string())
     }
-
 }
 
 pub fn init_config_file() -> Result<(), eyre::Report> {
@@ -164,12 +138,4 @@ pub fn init_config_file() -> Result<(), eyre::Report> {
     }
 
     Ok(())
-}
-
-pub fn _read_config() -> Result<Configs> {
-    let config_path = config_dir().join("config.toml");
-    let contents =
-        fs::read_to_string(config_path).wrap_err("Failed to read config file from path")?;
-    let configs: Configs = toml::from_str(&contents).wrap_err("Failed to parse config file")?;
-    Ok(configs)
 }
