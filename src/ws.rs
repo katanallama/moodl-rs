@@ -11,6 +11,13 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::{cmp::min, fs::File, io::Write};
 
+const GET_ASSIGNMENTS: &str = "mod_assign_get_assignments"; // TODO implement db
+const GET_CONTENTS: &str = "core_course_get_contents";
+const GET_COURSES: &str = "core_enrol_get_users_courses";
+const GET_GRADES: &str = "gradereport_user_get_grade_items"; // TODO implement db
+const GET_PAGES: &str = "mod_page_get_pages_by_courses";
+const GET_UID: &str = "core_webservice_get_site_info";
+
 pub struct ApiClient {
     base_url: String,
     client: reqwest::Client,
@@ -81,7 +88,7 @@ impl<'a> QueryParameters<'a> {
         self
     }
 
-    pub fn userid(mut self, userid: Option<i64>) -> Self {
+    pub fn _userid(mut self, userid: Option<i64>) -> Self {
         self.userid = userid;
         self
     }
@@ -182,6 +189,46 @@ impl ApiClient {
         pb.finish();
         log::info!("Downloaded file {:?}", file_path);
         Ok(())
+    }
+
+    pub async fn fetch_course_contents(&self, course_id: i64) -> Result<ApiResponse> {
+        let query = QueryParameters::new(self)
+            .function(GET_CONTENTS)
+            .courseid(course_id);
+        self.fetch(query).await
+    }
+
+    // TODO implement the db stuff for this
+    pub async fn fetch_course_grades(&self, course_id: i64) -> Result<ApiResponse> {
+        let query = QueryParameters::new(self)
+            .function(GET_GRADES)
+            .courseid(course_id);
+        self.fetch(query).await
+    }
+
+    pub async fn fetch_course_pages(&self) -> Result<ApiResponse> {
+        let query = QueryParameters::new(self).function(GET_PAGES);
+        self.fetch(query).await
+    }
+
+    // TODO implement the db stuff for this
+    pub async fn fetch_user_assignments(&self, course_id: i64) -> Result<ApiResponse> {
+        let query = QueryParameters::new(self)
+            .function(GET_ASSIGNMENTS)
+            .courseid(course_id);
+        self.fetch(query).await
+    }
+
+    pub async fn fetch_user_courses(&self) -> Result<ApiResponse> {
+        let query = QueryParameters::new(self)
+            .function(GET_COURSES)
+            .use_default_userid();
+        self.fetch(query).await
+    }
+
+    pub async fn fetch_user_id(&self) -> Result<ApiResponse> {
+        let query = QueryParameters::new(self).function(GET_UID);
+        self.fetch(query).await
     }
 }
 

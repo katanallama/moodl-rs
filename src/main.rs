@@ -1,7 +1,5 @@
 // main.rs
 //
-#![allow(dead_code)]
-
 mod db;
 mod downloader;
 mod models;
@@ -11,12 +9,12 @@ mod utils;
 mod ws;
 
 use {
+    crate::db::*,
     crate::models::configs::*,
     crate::models::courses::*,
     crate::models::pages::*,
     // crate::ui::tui::ui,
     crate::ws::*,
-    crate::db::*,
     chrono::Local,
     downloader::save_files,
     eyre::Result,
@@ -35,13 +33,6 @@ enum UserCommand {
     Download,
     Default,
 }
-
-const GET_ASSIGNMENTS: &str = "mod_assign_get_assignments"; // TODO implement db
-const GET_CONTENTS: &str = "core_course_get_contents";
-const GET_COURSES: &str = "core_enrol_get_users_courses";
-const GET_GRADES: &str = "gradereport_user_get_grade_items"; // TODO implement db
-const GET_PAGES: &str = "mod_page_get_pages_by_courses";
-const GET_UID: &str = "core_webservice_get_site_info";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -88,7 +79,7 @@ async fn main() -> Result<()> {
 }
 
 pub async fn get_userid(client: &mut ApiClient) -> Result<i64> {
-    let response = fetch_user_id(client).await?;
+    let response = client.fetch_user_id().await?;
     if let ApiResponse::SiteInfo(info) = response {
         return Ok(info.userid);
     }
@@ -96,7 +87,7 @@ pub async fn get_userid(client: &mut ApiClient) -> Result<i64> {
 }
 
 async fn get_courses(skin: &MadSkin, client: &mut ApiClient, config: &mut Configs) -> Result<()> {
-    let response = fetch_user_courses(client).await?;
+    let response = client.fetch_user_courses().await?;
 
     if let ApiResponse::Course(course_list) = response {
         let selected_courses = prompt_courses(&course_list, &skin)?;
@@ -114,13 +105,13 @@ async fn fetch_command_handler(
     conn: &mut Connection,
 ) -> Result<()> {
     for course in config.courses {
-        let response = fetch_course_contents(&client, course.id).await?;
+        let response = client.fetch_course_contents(course.id).await?;
         if let ApiResponse::Sections(mut sections) = response {
             insert_sections(conn, &mut sections, course.id)?;
         }
     }
 
-    let mut response = fetch_course_pages(&client).await?;
+    let mut response = client.fetch_course_pages().await?;
     if let ApiResponse::Pages(ref mut pages) = response {
         insert_pages(conn, &mut pages.pages)?;
     }
@@ -197,46 +188,6 @@ fn prompt_courses(courses: &Vec<Course>, skin: &MadSkin) -> Result<Vec<CourseCon
     }
 
     Ok(selected_courses)
-}
-
-async fn fetch_course_contents(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
-    let query = QueryParameters::new(client)
-        .function(GET_CONTENTS)
-        .courseid(course_id);
-    client.fetch(query).await
-}
-
-// TODO implement the db stuff for this
-async fn fetch_course_grades(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
-    let query = QueryParameters::new(client)
-        .function(GET_GRADES)
-        .courseid(course_id);
-    client.fetch(query).await
-}
-
-async fn fetch_course_pages(client: &ApiClient) -> Result<ApiResponse> {
-    let query = QueryParameters::new(client).function(GET_PAGES);
-    client.fetch(query).await
-}
-
-// TODO implement the db stuff for this
-async fn fetch_user_assignments(client: &ApiClient, course_id: i64) -> Result<ApiResponse> {
-    let query = QueryParameters::new(client)
-        .function(GET_ASSIGNMENTS)
-        .courseid(course_id);
-    client.fetch(query).await
-}
-
-async fn fetch_user_courses(client: &ApiClient) -> Result<ApiResponse> {
-    let query = QueryParameters::new(client)
-        .function(GET_COURSES)
-        .use_default_userid();
-    client.fetch(query).await
-}
-
-async fn fetch_user_id(client: &ApiClient) -> Result<ApiResponse> {
-    let query = QueryParameters::new(client).function(GET_UID);
-    client.fetch(query).await
 }
 
 fn make_skin() -> MadSkin {
