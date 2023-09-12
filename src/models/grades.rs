@@ -1,4 +1,5 @@
 // models/grades.rs
+//
 use {serde::Deserialize, serde::Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]

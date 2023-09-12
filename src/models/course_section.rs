@@ -1,7 +1,6 @@
 // models/course_section.rs
 //
-use crate::db::generic_insert;
-use crate::db::Insertable;
+use crate::db::{generic_insert, Insertable};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 

@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Courses (pub Vec<Course>);
+pub struct Courses(pub Vec<Course>);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Course {

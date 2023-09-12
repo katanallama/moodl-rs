@@ -1,7 +1,11 @@
 // tui.rs
 //
-use std::fs::File;
-use std::io::{self, stdout, Read, Write};
+#![allow(dead_code)]
+
+use std::{
+    fs::File,
+    io::{self, stdout, Read, Write},
+};
 use termimad::crossterm::{
     cursor::{Hide, Show},
     event::{self, Event, KeyCode::*, KeyEvent},

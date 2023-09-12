@@ -1,7 +1,6 @@
 // models/pages.rs
 //
-use crate::db::generic_insert;
-use crate::db::Insertable;
+use crate::db::{generic_insert, Insertable};
 use eyre::Result;
 use rusqlite::ToSql;
 use serde::{Deserialize, Serialize};

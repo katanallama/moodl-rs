@@ -2,8 +2,10 @@
 //
 use eyre::Result;
 use fern::InitError;
-use std::path::PathBuf;
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use {
     chrono::Local,
     termimad::{crossterm::style::Color::*, MadSkin, *},

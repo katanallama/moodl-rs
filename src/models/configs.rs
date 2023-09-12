@@ -166,7 +166,7 @@ pub fn init_config_file() -> Result<(), eyre::Report> {
     Ok(())
 }
 
-pub fn read_config() -> Result<Configs> {
+pub fn _read_config() -> Result<Configs> {
     let config_path = config_dir().join("config.toml");
     let contents =
         fs::read_to_string(config_path).wrap_err("Failed to read config file from path")?;

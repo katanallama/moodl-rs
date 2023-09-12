@@ -2,8 +2,10 @@ use crate::models::course_details::ParseCourseDetails;
 use eyre::Result;
 use html2md::parse_html;
 use serde_json;
-use std::fs::{self, File as StdFile};
-use std::io::Write;
+use std::{
+    fs::{self, File as StdFile},
+    io::Write,
+};
 
 fn convert_to_markdown(course_details: ParseCourseDetails) -> String {
     let mut markdown = String::new();
