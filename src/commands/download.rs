@@ -26,8 +26,6 @@ impl<'a> DownloadCommand<'a> {
     }
 }
 
-// TODO LOOK AT THIS
-// https://rust-lang.github.io/async-book/07_workarounds/03_send_approximation.html
 #[async_trait]
 impl<'a> Command for DownloadCommand<'a> {
     async fn execute(&mut self) -> Result<()> {

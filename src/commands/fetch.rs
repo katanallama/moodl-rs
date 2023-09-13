@@ -1,13 +1,12 @@
 // commands.rs
 //
-use async_trait::async_trait;
 use {
     crate::commands::command::Command,
     crate::db::connect_db,
     crate::models::{configs::*, course_section::insert_sections, pages::*},
     crate::ws::*,
 };
-use {eyre::Result, rusqlite::Connection};
+use {async_trait::async_trait, eyre::Result, rusqlite::Connection};
 
 pub struct FetchCommand<'a> {
     client: ApiClient, // owned ApiClient instance

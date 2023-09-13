@@ -10,18 +10,17 @@ mod utils;
 mod ws;
 
 use {
-    crate::commands::command::Command,
-    crate::commands::command::DefaultCommand,
-    crate::commands::download::DownloadCommand,
-    crate::commands::fetch::FetchCommand,
-    crate::commands::init::InitCommand,
-    crate::commands::parse::ParseCommand,
+    crate::commands::{
+        command::{Command, DefaultCommand},
+        download::DownloadCommand,
+        fetch::FetchCommand,
+        init::InitCommand,
+        parse::ParseCommand,
+    },
     crate::db::*,
     crate::models::{configs::*, courses::*},
     crate::utils::*,
     crate::ws::*,
-};
-use {
     eyre::Result,
     termimad::{MadSkin, Question},
 };

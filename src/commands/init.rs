@@ -1,6 +1,5 @@
 // commands/init.rs
 //
-use async_trait::async_trait;
 use {
     crate::commands::command::Command,
     crate::db::{connect_db, create_tables},
@@ -8,7 +7,7 @@ use {
     crate::prompt_courses,
     crate::ws::*,
 };
-use {eyre::Result, termimad::MadSkin};
+use {async_trait::async_trait, eyre::Result, termimad::MadSkin};
 
 pub struct InitCommand<'a> {
     config: &'a mut Configs,
