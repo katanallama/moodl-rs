@@ -1,20 +1,20 @@
 // downloader.rs
+//
 use crate::{
     models::course_details::{GetFileData, ParseCourseDetails},
     utils::create_dir,
-    ws::ApiClient,
+    ws::ApiClient, db::connect_db,
 };
 use eyre::Result;
 use log;
 use regex::Regex;
-use rusqlite::{params, Connection};
+use rusqlite::params;
 use serde_json;
 
 pub async fn save_files(
     json_data: &str,
     file_path: &str,
     api_client: &ApiClient,
-    conn: &Connection,
 ) -> Result<()> {
     let parsed_course_details: ParseCourseDetails = serde_json::from_str(json_data)?;
 
@@ -24,7 +24,6 @@ pub async fn save_files(
                 if let Some((filename, fileurl)) = content.get_file_data() {
                     handle_file_operations(
                         api_client,
-                        conn,
                         file_path,
                         "Content",
                         content.content_id,
@@ -40,7 +39,6 @@ pub async fn save_files(
                     if let Some((filename, fileurl)) = file.get_file_data() {
                         handle_file_operations(
                             api_client,
-                            conn,
                             file_path,
                             "Files",
                             file.file_id,
@@ -59,7 +57,6 @@ pub async fn save_files(
 
 async fn handle_file_operations(
     api_client: &ApiClient,
-    conn: &Connection,
     file_path: &str,
     table_name: &str,
     id_option: Option<i64>,
@@ -73,7 +70,7 @@ async fn handle_file_operations(
         match create_dir(&clean_file_path) {
             Ok(_) => match api_client.download_file(&fileurl, &clean_file_path).await {
                 Ok(_) => {
-                    match update_file_paths_in_db(conn, table_name, "id", id, &clean_file_path) {
+                    match update_file_paths_in_db(table_name, "id", id, &clean_file_path) {
                         Ok(_) => {}
                         Err(e) => log::error!("Failed to update DB for {}: {:?}", table_name, e),
                     }
@@ -99,12 +96,12 @@ fn sanitize_filename(filename: &str) -> String {
 }
 
 pub fn update_file_paths_in_db(
-    conn: &Connection,
     table_name: &str,
     id_column_name: &str,
     id: i64,
     localpath: &str,
 ) -> Result<()> {
+    let conn = connect_db()?;
     let sql = format!(
         "UPDATE {} SET localpath = ? WHERE {} = ?",
         table_name, id_column_name

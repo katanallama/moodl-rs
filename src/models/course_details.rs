@@ -6,6 +6,8 @@ use rusqlite::{params, Connection};
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
 
+use crate::db::connect_db;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CourseDetails {
     pub section_name: Option<String>,
@@ -91,7 +93,10 @@ pub trait GetFileData {
 
 impl GetFileData for ContentDetails {
     fn get_file_data(&self) -> Option<(String, String)> {
-        Some((self.content_filename.clone()?, self.content_fileurl.clone()?))
+        Some((
+            self.content_filename.clone()?,
+            self.content_fileurl.clone()?,
+        ))
     }
 }
 
@@ -174,7 +179,6 @@ pub fn get_course_details(conn: &Connection, course_id: i64) -> Result<Vec<Cours
             // module_contextid: row.get("module_contextid")?,
             module_description: row.get("module_description")?,
             // module_lastfetched: row.get("module_lastfetched")?,
-
             content_id: row.get("content_id")?,
             content_filename: row.get("content_filename")?,
             content_fileurl: row.get("content_fileurl")?,
@@ -192,7 +196,6 @@ pub fn get_course_details(conn: &Connection, course_id: i64) -> Result<Vec<Cours
             // page_revision: row.get("page_revision")?,
             // page_timemodified: row.get("page_timemodified")?,
             // page_lastfetched: row.get("page_lastfetched")?,
-
             file_id: row.get("file_id")?,
             file_filename: row.get("file_filename")?,
             file_fileurl: row.get("file_fileurl")?,
@@ -210,11 +213,14 @@ pub fn get_course_details(conn: &Connection, course_id: i64) -> Result<Vec<Cours
     Ok(course_details)
 }
 
-pub fn parse_course_json(conn: &Connection, course_id: i64) -> Result<String> {
-    let course_details: Vec<CourseDetails> = get_course_details(conn, course_id)?;
+pub fn parse_course_json(course_id: i64) -> Result<String> {
+    let conn = connect_db();
+    let course_details: Vec<CourseDetails> = get_course_details(&conn.unwrap(), course_id)?;
 
     if course_details.is_empty() {
-        return Err(eyre::eyre!("The 'Contents' table is empty, run 'Fetch' command first."));
+        return Err(eyre::eyre!(
+            "The 'Contents' table is empty, run 'Fetch' command first."
+        ));
     }
 
     let mut section_map: LinkedHashMap<String, SectionDetails> = LinkedHashMap::new();

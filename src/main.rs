@@ -1,8 +1,8 @@
 // main.rs
 //
+mod commands;
 mod db;
 mod downloader;
-mod handlers;
 mod models;
 mod parser;
 mod ui;
@@ -10,8 +10,13 @@ mod utils;
 mod ws;
 
 use {
+    crate::commands::command::Command,
+    crate::commands::command::DefaultCommand,
+    crate::commands::download::DownloadCommand,
+    crate::commands::fetch::FetchCommand,
+    crate::commands::init::InitCommand,
+    crate::commands::parse::ParseCommand,
     crate::db::*,
-    crate::handlers::*,
     crate::models::{configs::*, courses::*},
     crate::utils::*,
     crate::ws::*,
@@ -23,8 +28,8 @@ use {
 
 enum UserCommand {
     Init,
-    Parse,
     Fetch,
+    Parse,
     Download,
     Default,
 }
@@ -36,40 +41,33 @@ async fn main() -> Result<()> {
 
     let mut config = Configs::new()?;
     let skin = make_skin();
-    let command = prompt_command(&skin)?;
+    let command_enum = prompt_command(&skin)?;
 
-    let mut client;
-    match command {
+    let client;
+
+    let mut command: Box<dyn Command>;
+
+    match command_enum {
         UserCommand::Init => {
-            let conn = connect_db()?;
-            db::create_tables(&conn)?;
-
-            config.prompt_config(&skin).await?;
-
-            client = ApiClient::from_config(&config)?;
-            let userid = get_userid(&mut client).await?;
-            config.write_userid(userid)?;
-
-            client = ApiClient::from_config(&config)?;
-            get_courses(&skin, &mut client, &mut config).await?;
+            command = Box::new(InitCommand::new(&mut config, &skin));
         }
         UserCommand::Fetch => {
-            let mut conn = connect_db()?;
             client = ApiClient::from_config(&config)?;
-            fetch_course_handler(config, &mut client, &mut conn).await?;
-            fetch_page_handler(&mut client, &mut conn).await?;
+            command = Box::new(FetchCommand::new(client, &config));
         }
         UserCommand::Parse => {
-            let conn = connect_db()?;
-            parse_command_handler(config, &conn).await?;
+            command = Box::new(ParseCommand::new(&config));
         }
         UserCommand::Download => {
-            let conn = connect_db()?;
             client = ApiClient::from_config(&config)?;
-            download_command_handler(config, &client, &conn).await?;
+            command = Box::new(DownloadCommand::new(client, &config));
         }
-        UserCommand::Default => {}
+        UserCommand::Default => {
+            command = Box::new(DefaultCommand::new(&skin));
+        }
     }
+
+    command.execute().await?;
 
     Ok(())
 }

@@ -10,6 +10,7 @@ name = "moodl-rs"
 path = "src/main.rs"
 
 [dependencies]
+async-trait = "0.1.73"
 chrono = "0.4.26"
 config = "0.13.3"
 eyre = "0.6.8"
