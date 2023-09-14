@@ -1,5 +1,6 @@
 // main.rs
 //
+#![feature(string_remove_matches)]
 mod commands;
 mod db;
 mod downloader;

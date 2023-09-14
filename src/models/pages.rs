@@ -2,6 +2,7 @@
 //
 use crate::db::{generic_insert, Insertable};
 use eyre::Result;
+use html2md::parse_html;
 use rusqlite::ToSql;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -35,10 +36,39 @@ pub struct File {
     pub page_id: Option<i64>,
 }
 
+impl Page {
+    pub fn process(&mut self) {
+        if let Some(desc) = &mut self.content {
+            let _ = desc.remove_matches(" dir=\"ltr\"");
+            let _ = desc.remove_matches(" style=\"text-align: left;\"");
+            let _ = desc.remove_matches("<p></p>");
+            let _ = desc.remove_matches("<br>");
+            let _ = desc.remove_matches("<div class=\"no-overflow\">");
+            let _ = desc.remove_matches("</div>");
+            let _ = desc.remove_matches("<span lang=\"EN-US\">");
+            let _ = desc.remove_matches("</span>");
+            let _ = desc.remove_matches("\r");
+            let _ = desc.remove_matches("\n");
+
+            // let name = &mut self.name;
+            // if desc.contains(&name.to_string()) {
+            //     println!("{}", desc);
+            // }
+
+
+            // let _ = desc.remove_matches(&name.to_string());
+            let _ = desc.remove_matches("<h4></h4>");
+            let _ = desc.remove_matches("<h5></h5>");
+            *desc = parse_html(&desc);
+        }
+    }
+}
+
 pub fn insert_pages(conn: &mut rusqlite::Connection, pages: &mut [Page]) -> Result<()> {
     let tx = conn.transaction()?;
 
     for page in pages.iter_mut() {
+        page.process();
         generic_insert(&tx, page)?;
 
         for introfile in page.introfiles.iter_mut() {

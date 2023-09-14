@@ -1,12 +1,5 @@
 use crate::models::course_details::ParseCourseDetails;
-// use select::document::Document;
-// use select::node::Node;
-// use select::predicate::{Name, Predicate};
-// use select::predicate::Predicate;
-// use select::*;
 use eyre::Result;
-use html2md::{parse_html, parse_html_extended};
-use scraper::{ElementRef, Html, Selector};
 use serde_json;
 use std::{
     fs::{self, File as StdFile},
@@ -18,60 +11,60 @@ fn convert_to_markdown(course_details: ParseCourseDetails) -> String {
 
     for section in course_details.sections {
         if let Some(section_name) = &section.section_name {
-            markdown.push_str(&format!("# {}\n", section_name));
+            markdown.push_str(&format!("# {}", section_name));
         }
         if let Some(section_summary) = &section.section_summary {
-            markdown.push_str(&format!("{}\n", parse_html(section_summary)));
+            markdown.push_str(&format!("\n{}", section_summary));
         }
-        // if let Some(section_lastfetched) = &section.section_lastfetched {
-        //     markdown.push_str(&format!("Last Fetched: {}\n", section_lastfetched));
-        // }
 
         for module in section.modules {
             if let Some(module_name) = &module.module_name {
                 markdown.push_str(&format!("\n## {}\n", module_name));
             }
             if let Some(module_description) = &module.module_description {
-                let clean_desc = clean_html(&module_description);
-                let parsed_md = parse_html_extended(&clean_desc);
-                markdown.push_str(&format!("\n{}\n", parsed_md));
+                if !markdown.contains(module_description) {
+                    markdown.push_str(&format!("{}\n\n", module_description));
+                }
             }
-
-            // markdown.push_str("#### Contents\n");
-            for content in &module.content {
-                if let Some(content_filename) = &content.content_filename {
-                    if let Some(content_fileurl) = &content.content_fileurl {
-                        markdown.push_str(&format!("\n[{}]", content_filename));
-                        markdown.push_str(&format!("({})\n", content_fileurl));
+            for page in module.pages {
+                if let Some(page_content) = &page.page_content {
+                    if !markdown.contains(page_content) {
+                        markdown.push_str(&format!("{}\n\n", page_content));
                     }
                 }
-            }
-
-            // markdown.push_str("#### Pages\n");
-            for page in &module.pages {
-                if let Some(page_name) = &page.page_name {
-                    markdown.push_str(&format!("\n### {}\n", page_name));
-                }
-                // if let Some(page_intro) = &page.page_intro {
-                //     markdown.push_str(&format!("- Page Intro: {}\n", parse_html(page_intro)));
-                // }
-                if let Some(page_content) = &page.page_content {
-                    markdown.push_str(&format!("{}\n", parse_html(page_content)));
-                }
-
-                // markdown.push_str("##### Files\n");
                 for file in &page.files {
                     if let Some(file_filename) = &file.file_filename {
-                        if let Some(file_fileurl) = &file.file_fileurl {
+                        if let Some(file_localpath) = &file.file_localpath {
+                            if let Some(stripped_localpath) = file_localpath.strip_prefix("out/") {
+                                markdown.push_str(&format!("\n[{}]", file_filename));
+                                markdown.push_str(&format!("({})\n\n", stripped_localpath));
+                            }
+                        } else if let Some(file_fileurl) = &file.file_fileurl {
                             markdown.push_str(&format!("\n[{}]", file_filename));
-                            markdown.push_str(&format!("({})\n", file_fileurl));
+                            markdown.push_str(&format!("({})\n\n", file_fileurl));
                         }
                     }
                 }
             }
-
-            markdown.push_str("\n");
+            for content in &module.content {
+                if let Some(content_filename) = &content.content_filename {
+                    if !content_filename.contains("index.html") {
+                        if let Some(content_localpath) = &content.content_localpath {
+                            if let Some(stripped_localpath) = content_localpath.strip_prefix("out/")
+                            {
+                                markdown.push_str(&format!("[{}]", content_filename));
+                                markdown.push_str(&format!("({})\n\n", stripped_localpath));
+                            }
+                        } else if let Some(content_fileurl) = &content.content_fileurl {
+                            markdown.push_str(&format!("[{}]", content_filename));
+                            markdown.push_str(&format!("({})\n\n", content_fileurl));
+                        }
+                    }
+                }
+            }
         }
+        markdown.push_str("\n---");
+        markdown.push_str("\n\n");
     }
 
     if let Some(course_id) = course_details.courseid {
@@ -79,33 +72,6 @@ fn convert_to_markdown(course_details: ParseCourseDetails) -> String {
     }
 
     markdown
-}
-
-fn clean_html(html: &str) -> String {
-    let parsed_html = Html::parse_fragment(html);
-    let selector_h1 = Selector::parse("h1").unwrap();
-    let selector_h2 = Selector::parse("h2").unwrap();
-    let selector_h3 = Selector::parse("h3").unwrap();
-    let selector_h4 = Selector::parse("h4").unwrap();
-    let selector_h5 = Selector::parse("h5").unwrap();
-    let selector_h6 = Selector::parse("h6").unwrap();
-
-    let mut cleaned_html = String::new();
-    for node in parsed_html.tree.root().children() {
-        if let Some(element) = ElementRef::wrap(node) {
-            if !(element.select(&selector_h1).next().is_some()
-                || element.select(&selector_h2).next().is_some()
-                || element.select(&selector_h3).next().is_some()
-                || element.select(&selector_h4).next().is_some()
-                || element.select(&selector_h5).next().is_some()
-                || element.select(&selector_h6).next().is_some())
-            {
-                cleaned_html.push_str(&element.html());
-            }
-        }
-    }
-
-    cleaned_html
 }
 
 pub fn save_markdown_to_file(json_data: &str, file_path: &str) -> Result<()> {
