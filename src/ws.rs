@@ -1,8 +1,8 @@
 // ws.rs
 //
 use crate::models::{
-    assignments::Assignments, configs::Configs, course_section::Section, courses::Course,
-    grades::UserGrade, pages::Pages, user::SiteInfo,
+    assignments::Assignments, configs::Configs, course::CourseSection, course::Pages,
+    courses::Course, grades::UserGrade, user::SiteInfo,
 };
 use eyre::Result;
 use futures_util::StreamExt;
@@ -30,7 +30,7 @@ pub struct ApiClient {
 pub enum ApiResponse {
     Exception(ApiError),
     SiteInfo(SiteInfo),
-    Sections(Vec<Section>),
+    Sections(Vec<CourseSection>),
     Course(Vec<Course>),
     UserGrades(UserGradesResponse),
     Pages(Pages),
@@ -149,12 +149,20 @@ impl ApiClient {
         // If parsing as ApiError failed, try to parse it as an ApiResponse
         match serde_json::from_str::<ApiResponse>(&response_text) {
             Ok(api_response) => Ok(api_response),
-            Err(_) => Err(eyre::eyre!("Failed to parse API response")),
+            Err(_) => Err(eyre::eyre!(
+                "Failed to parse API response: {:?}",
+                response_text
+            )),
         }
     }
 
     pub async fn download_file(&self, url: &str, file_path: &str) -> Result<(), eyre::Report> {
-        let url_with_token = format!("{}&token={}", url, self.wstoken);
+        let url_with_token;
+        if url.contains("uregina") {
+            url_with_token = format!("{}&token={}", url, self.wstoken);
+        } else {
+            url_with_token = url.to_string();
+        }
 
         let res = self
             .client

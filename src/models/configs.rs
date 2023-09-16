@@ -27,6 +27,7 @@ pub struct ApiConfig {
 pub struct CourseConfig {
     pub id: i64,
     pub shortname: Option<String>,
+    pub path: Option<String>,
 }
 
 impl From<&crate::Course> for CourseConfig {
@@ -35,11 +36,13 @@ impl From<&crate::Course> for CourseConfig {
             CourseConfig {
                 id: course.id,
                 shortname: Some(modify_shortname(&shortname)),
+                path: None,
             }
         } else {
             CourseConfig {
                 id: course.id,
                 shortname: course.shortname.clone(),
+                path: None,
             }
         }
     }
@@ -56,6 +59,26 @@ impl Configs {
             .build()?;
 
         Ok(s.try_deserialize()?)
+    }
+
+    pub fn get_course_name(&self, id: i64) -> Option<&String> {
+        self.courses.iter().find_map(|course| {
+            if course.id == id {
+                course.shortname.as_ref()
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn get_course_path(&self, id: i64) -> Option<&String> {
+        self.courses.iter().find_map(|course| {
+            if course.id == id {
+                course.path.as_ref()
+            } else {
+                None
+            }
+        })
     }
 
     pub fn write_to_file(&mut self) -> Result<()> {

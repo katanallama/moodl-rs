@@ -36,6 +36,8 @@ enum UserCommand {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+
+    // combine();
     setup_logger().expect("Failed to initialize logging");
     initialize_db()?;
 

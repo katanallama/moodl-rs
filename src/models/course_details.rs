@@ -269,7 +269,7 @@ pub fn parse_course_json(course_id: i64) -> Result<String> {
 
     let json_data = serde_json::to_string_pretty(&parsed_course_details)?;
 
-    println!("JSON: {} ", json_data);
+    // println!("JSON: {} ", json_data);
 
     Ok(json_data)
 }
