@@ -121,9 +121,10 @@ impl ApiClient {
     }
 
     pub async fn _fetch_text<T: ApiQuery>(&self, query: T) -> Result<String> {
+        let base_url = format!("https://{}/webservice/rest/server.php", &self.base_url);
         let response = self
             .client
-            .get(&self.base_url)
+            .get(base_url)
             .query(&query.with_token(&self.wstoken))
             .send()
             .await?;
@@ -132,9 +133,10 @@ impl ApiClient {
     }
 
     pub async fn fetch<T: ApiQuery>(&self, query: T) -> Result<ApiResponse> {
+        let base_url = format!("https://{}/webservice/rest/server.php", &self.base_url);
         let response = self
             .client
-            .get(&self.base_url)
+            .get(base_url)
             .query(&query.with_token(&self.wstoken))
             .send()
             .await?;
@@ -158,7 +160,7 @@ impl ApiClient {
 
     pub async fn download_file(&self, url: &str, file_path: &str) -> Result<(), eyre::Report> {
         let url_with_token;
-        if url.contains("uregina") {
+        if url.contains(&self.base_url) {
             url_with_token = format!("{}&token={}", url, self.wstoken);
         } else {
             url_with_token = url.to_string();
