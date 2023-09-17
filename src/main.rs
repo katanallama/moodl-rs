@@ -36,8 +36,6 @@ enum UserCommand {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-
-    // combine();
     setup_logger().expect("Failed to initialize logging");
     initialize_db()?;
 
@@ -49,25 +47,22 @@ async fn main() -> Result<()> {
 
     let mut command: Box<dyn Command>;
 
-    match command_enum {
-        UserCommand::Init => {
-            command = Box::new(InitCommand::new(&mut config, &skin));
-        }
+    command = match command_enum {
+        UserCommand::Init => Box::new(InitCommand::new(&mut config, &skin)),
         UserCommand::Fetch => {
             client = ApiClient::from_config(&config)?;
-            command = Box::new(FetchCommand::new(client, &config));
+            Box::new(FetchCommand::new(client, &config))
         }
-        UserCommand::Parse => {
-            command = Box::new(ParseCommand::new(&config));
-        }
+        UserCommand::Parse => Box::new(ParseCommand::new(&config)),
         UserCommand::Download => {
             client = ApiClient::from_config(&config)?;
-            command = Box::new(DownloadCommand::new(client, &config));
+            Box::new(DownloadCommand::new(client, &config))
         }
         UserCommand::Default => {
-            command = Box::new(DefaultCommand::new(&skin));
+            client = ApiClient::from_config(&config)?;
+            Box::new(DefaultCommand::new(&config, client))
         }
-    }
+    };
 
     command.execute().await?;
 
@@ -81,17 +76,31 @@ fn prompt_command(skin: &MadSkin) -> Result<UserCommand> {
         "**I**nit - Initialize user information
         Ensure 'config.toml' has your Moodle Mobile Service Key and URL.",
     );
-    q.add_answer("f", "**F**etch - Fetch course materials");
-    q.add_answer("p", "**P**arse - Parse a course");
-    q.add_answer("D", "**D**ownload - Download a course");
-    q.add_answer("d", "Default - Run the default commands");
+    q.add_answer(
+        "f",
+        "**F**etch - Fetch course material
+        This will populate 'moodl-rs.db' with all course material",
+    );
+    q.add_answer(
+        "D",
+        "**D**ownload - Downloads all course materials(.pdfs, .pptxs, etc.)
+        Default location is ~/ on linux/mac and typically C:\\Users\\<YourUserName> on windows
+        Set the path for each course in 'config.toml' to save materials elsewhere",
+    );
+    q.add_answer(
+        "p",
+        "**P**arse - Parse the course page to a markdown file
+        Default location is ~/ on linux/mac and typically C:\\Users\\<YourUserName> on windows
+        Set the path for each course in 'config.toml' to save markdown elsewhere",
+    );
+    q.add_answer("d", "Default - Run fetch, download, parse sequentially");
     let a = q.ask(skin)?;
 
     match a.as_str() {
         "i" => Ok(UserCommand::Init),
         "f" => Ok(UserCommand::Fetch),
-        "p" => Ok(UserCommand::Parse),
         "D" => Ok(UserCommand::Download),
+        "p" => Ok(UserCommand::Parse),
         _ => Ok(UserCommand::Default),
     }
 }

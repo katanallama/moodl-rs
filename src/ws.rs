@@ -18,6 +18,7 @@ const _GET_GRADES: &str = "gradereport_user_get_grade_items"; // TODO implement 
 const GET_PAGES: &str = "mod_page_get_pages_by_courses";
 const GET_UID: &str = "core_webservice_get_site_info";
 
+#[derive(Clone)]
 pub struct ApiClient {
     base_url: String,
     client: reqwest::Client,

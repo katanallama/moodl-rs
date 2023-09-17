@@ -1,7 +1,8 @@
 // commands/command.rs
 //
-use async_trait::async_trait;
-use {eyre::Result, termimad::MadSkin};
+use super::{download::DownloadCommand, fetch::FetchCommand, parse::ParseCommand};
+use crate::{models::configs::Configs, ws::ApiClient};
+use {async_trait::async_trait, eyre::Result};
 
 #[async_trait]
 pub trait Command {
@@ -9,18 +10,28 @@ pub trait Command {
 }
 
 pub struct DefaultCommand<'a> {
-    _skin: &'a MadSkin,
+    config: &'a Configs,
+    client: ApiClient,
 }
 
 impl<'a> DefaultCommand<'a> {
-    pub fn new(_skin: &'a MadSkin) -> Self {
-        Self { _skin }
+    pub fn new(config: &'a Configs, client: ApiClient) -> Self {
+        Self { config, client }
     }
 }
 
 #[async_trait]
 impl<'a> Command for DefaultCommand<'a> {
     async fn execute(&mut self) -> Result<()> {
+        let mut fetch_command = FetchCommand::new(self.client.clone(), self.config);
+        fetch_command.execute().await?;
+
+        let mut download_command = DownloadCommand::new(self.client.clone(), self.config);
+        download_command.execute().await?;
+
+        let mut parse_command = ParseCommand::new(self.config);
+        parse_command.execute().await?;
+
         Ok(())
     }
 }
