@@ -1,22 +1,57 @@
 * Moodl-rs
 
+Moodl-rs is a utility tool designed to create offline versions of your university courses available on Moodle. It streamlines the process of downloading, organizing, and accessing course materials in an offline format, giving you the flexibility to study wherever and whenever you want, without an internet connection.
+
+** Features
+
+- Fetch and parse course material including PDFs, PPTXs, etc.
+- Download and organize course materials offline
+- Convert course page to a markdown file
+- Tracking courses with ease
+- Configuration via a TOML file
+
 ** Getting Started
 
-You'll need ~sqlite3~ on your system, go ahead and install that if you haven't. It's included in the flake if you're on nix. When you first initialize moodl-rs, ~config.toml~ will be placed in ~~/.config/moodl-rs~ and the database is stored at ~~.local/share/moodl-rs~.
+*** Prerequisites
+
+- Ensure that [[https://www.sqlite.org/download.html][sqlite]] is installed on your system. It is included in the flake if you're using nix.
+- You will need to have Rust's cargo installed to run the application.
+
+*** Installation
+
+1. Clone the repository to your local system.
+2. Navigate to the project directory in the terminal.
+3. Run the following command to start Moodl-rs:
 
 #+begin_src sh
 cargo run
 #+end_src
 
+*** Initial Configuration
+
+Upon first initialization, a ~config.toml~ file will be placed in ~\~/.config/moodl-rs~, and the database will be stored at ~\~/.local/share/moodl-rs~.
+
+Follow the on-screen instructions to initialize user information, set your Moodle URL, API token, and select the courses you want to track:
+
 #+begin_src sh
 Choose a command to run:
 [i] Init - Initialize user information
     Ensure 'config.toml' has your Moodle Mobile Service Key and URL.
-[f] Fetch - Fetch course materials
-[p] Parse - Parse a course
-[D] Download - Download a course
-[d] Default - Run the default commands
+[f] Fetch - Fetch course material
+    This will populate 'moodl-rs.db' with all course material
+[D] Download - Downloads all course materials(.pdfs, .pptxs, etc.)
+    Default location is ~/ on linux/mac and typically C:\Users\<YourUserName> on windows
+    Set the path for each course in 'config.toml' to save materials elsewhere
+[p] Parse - Parse the course page to a markdown file
+    Default location is ~/ on linux/mac and typically C:\Users\<YourUserName> on windows
+    Set the path for each course in 'config.toml' to save markdown elsewhere
+[d] Default - Run fetch, download, parse sequentially
 i
+Would you like to configure your moodle url and API token now?
+You will only have to do this once.
+[y] Yes, configure now
+[n] No, skip and configure manually
+...
 Track the course TEST_COURSE_1?
 [y] Yes, track it
 [n] No, skip it
@@ -31,24 +66,11 @@ Track the course TEST_COURSE_3?
 n
 #+end_src
 
-Then fetch your course materials:
+*** Setup
 
-#+begin_src sh
-Choose a command to run:
-[i] Init - Initialize user information
-    Ensure 'config.toml' has your Moodle Mobile Service Key and URL.
-[f] Fetch - Fetch course materials
-[p] Parse - Parse a course
-[D] Download - Download a course
-[d] Default - Run the default commands
-f
-#+end_src
+Configure Moodl-rs through the config.toml file located at ~/.config/moodl-rs/config.toml. Initially, it should resemble the following structure:
 
-** Setup
-
-The configuration is handled in ~config.toml~, yours should look like this to start:
-
-#+begin_src sh
+#+begin_src toml
 ## config.toml
 ## This holds the default configuration for moodl-rs
 ## Update this with your own information
@@ -57,7 +79,7 @@ The configuration is handled in ~config.toml~, yours should look like this to st
 ## The base_url and token are required before starting
 ## initilization will fetch your userid
 [api]
-base_url = "https://your.site.com/webservice/rest/server.php"
+base_url = "your.site.com"
 token = "12345x7rb2n3456zo1i6ai8nquh5j18c"
 userid = 123456
 
@@ -67,18 +89,63 @@ userid = 123456
 [[courses]]
 id = 1
 shortname = "ONE"
+## Course path will automatically be prefixed with ~/
+path = "course-path-one"
 
 [[courses]]
 id = 2
 shortname = "TWO"
+## Course path will automatically be prefixed with ~/
+path = "course-path-two"
 #+end_src
 
-Running the ~init~ command will prompt you for the base url and token, then automatically fetch your user id and prompt which courses to track.
+** Usage
 
-* Roadmap
+Once set up, you can run various commands to fetch, download, and parse selected course materials:
+
+#+begin_src sh
+Choose a command to run:
+[i] Init - Initialize user information
+    Ensure 'config.toml' has your Moodle Mobile Service Key and URL.
+[f] Fetch - Fetch course material
+    This will populate 'moodl-rs.db' with all course material
+[D] Download - Downloads all course materials(.pdfs, .pptxs, etc.)
+    Default location is ~/ on linux/mac and typically C:\Users\<YourUserName> on windows
+    Set the path for each course in 'config.toml' to save materials elsewhere
+[p] Parse - Parse the course page to a markdown file
+    Default location is ~/ on linux/mac and typically C:\Users\<YourUserName> on windows
+    Set the path for each course in 'config.toml' to save markdown elsewhere
+[d] Default - Run fetch, download, parse sequentially
+#+end_src
+
+Now you can run the default command to fetch, download, and parse all your selected course materials.
+
+** FAQ
+
+***** Q: Where are the course materials saved by default?
+The default location is ~\~/~ on Linux/Mac and typically ~C:\\Users\\<YourUserName>~ on Windows. You can change the save path for each course in the ~config.toml~ file.
+
+***** Q: How do I update the tracked courses?
+Re-run the initialization command and follow the prompts to add or remove courses from the tracking list.
+
+***** Q: How can I contribute to the project?
+We welcome contributions! Feel free to fork the repository and submit a pull request with your changes.
+
+***** Q: How do I obtain the API token?
+The API token can be obtained from your Moodle website. Log into your account and navigate to your user preferences, which is usually accessible through your profile or settings page. From there, go to "Security keys" and find the "Moodle Mobile additional features service" section to get your token. Keep this token secure and do not share it with others.
+
+***** Q: What is the base URL, and where can I find it?
+The base URL is the web address of your Moodle website, where you access your courses online. It often looks like "urcourses.uregina.ca" or a similar format, depending on your institution. You should enter this URL without any additional paths or parameters into the `base_url` field in the `config.toml` file.
+
+***** Q: What about the user ID in the `config.toml` file?
+You don't need to worry about the user ID while setting up Moodl-rs. During the initial setup and configuration process, the user ID will be automatically fetched and updated in the `config.toml` file. Ensure that the base URL and token are correctly configured, and the application will take care of the rest.
+
+** Roadmap
+
+**** TODO runable binaries for linux/macos/windows
 
 **** TODO Fetch and Parse grades and assignments
 
-**** TODO Parsing course contents to ~.org~ or ~.md~
+**** TODO Parsing course contents to ~.org~
 
 **** TODO Checking for and parsing updates
