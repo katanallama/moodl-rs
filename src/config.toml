@@ -6,7 +6,7 @@
 ## The base_url and token are required before starting
 ## initilization will fetch your userid
 [api]
-base_url = "https://your.site.com/webservice/rest/server.php"
+base_url = "your.site.com"
 token = "12345x7rb2n3456zo1i6ai8nquh5j18c"
 userid = 123456
 
