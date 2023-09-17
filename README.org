@@ -1,9 +1,10 @@
 * Moodl-rs
 
-Moodl-rs is a utility tool designed to create offline versions of your university courses available on Moodle. It streamlines the process of downloading, organizing, and accessing course materials in an offline format, giving you the flexibility to study wherever and whenever you want, without an internet connection.
+Moodl-rs is a utility tool designed to create offline versions of your university courses available on Moodle. It streamlines the process of downloading, organizing, and accessing course materials in an offline format, giving you the flexibility to not use the new Moodle UI.
 
 ** Features
 
+- Store course content in an sqlite database
 - Fetch and parse course material including PDFs, PPTXs, etc.
 - Download and organize course materials offline
 - Convert course page to a markdown file
@@ -15,7 +16,7 @@ Moodl-rs is a utility tool designed to create offline versions of your universit
 *** Prerequisites
 
 - Ensure that [[https://www.sqlite.org/download.html][sqlite]] is installed on your system. It is included in the flake if you're using nix.
-- You will need to have Rust's cargo installed to run the application.
+- You will need to have Rust's ~cargo~ installed to run the application for now. If there's enough interest precompiled binaries will become available.
 
 *** Installation
 
