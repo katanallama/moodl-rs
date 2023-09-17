@@ -1,9 +1,11 @@
 // models/course.rs
 //
+use crate::db::retrieve_param;
 use crate::db::{generic_insert, generic_retrieve, Insertable, Retrievable};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use rusqlite::{Connection, ToSql, Row, params};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CourseSection {
@@ -77,7 +79,7 @@ impl CourseSection {
 }
 
 pub fn insert_course_sections(
-    conn: &mut rusqlite::Connection,
+    conn: &mut Connection,
     sections: &mut Vec<CourseSection>,
     pages: &Pages,
     courseid: i64,
@@ -117,7 +119,7 @@ impl Insertable for CourseSection {
                 lastfetched=excluded.lastfetched"
     }
 
-    fn bind_parameters(&self) -> Vec<(&'static str, &dyn rusqlite::ToSql)> {
+    fn bind_parameters(&self) -> Vec<(&'static str, &dyn ToSql)> {
         vec![
             (":sectionid", &self.id),
             (":name", &self.name),
@@ -142,7 +144,7 @@ impl Insertable for CourseModule {
                 lastfetched=excluded.lastfetched"
     }
 
-    fn bind_parameters(&self) -> Vec<(&'static str, &dyn rusqlite::ToSql)> {
+    fn bind_parameters(&self) -> Vec<(&'static str, &dyn ToSql)> {
         vec![
             (":moduleid", &self.id),
             (":name", &self.name),
@@ -164,7 +166,7 @@ impl Insertable for CourseFile {
                 lastfetched=excluded.lastfetched"
     }
 
-    fn bind_parameters(&self) -> Vec<(&'static str, &dyn rusqlite::ToSql)> {
+    fn bind_parameters(&self) -> Vec<(&'static str, &dyn ToSql)> {
         vec![
             (":filename", &self.filename),
             (":fileurl", &self.fileurl),
@@ -175,23 +177,113 @@ impl Insertable for CourseFile {
     }
 }
 
-impl Retrievable for CourseFile {
+impl Retrievable for CourseSection {
     fn select_query() -> &'static str {
-        "SELECT filename, fileurl, localpath, timemodified, module_id FROM Files"
+        "SELECT sectionid, name, summary, courseid, timemodified
+            FROM Sections WHERE courseid = ?1"
+    }
+    fn select_query_all() -> &'static str {
+        "SELECT sectionid, name, summary, courseid, timemodified
+            FROM Sections"
     }
 
-    fn from_row(row: &rusqlite::Row) -> Result<Self> {
-        Ok(CourseFile {
-            filename: row.get(0)?,
-            fileurl: row.get(1)?,
-            filepath: row.get(2)?,
-            timemodified: row.get(3)?,
-            module_id: row.get(4)?,
+    fn from_row(row: &Row) -> Result<Self> {
+        Ok(CourseSection {
+            id: row.get("sectionid")?,
+            name: row.get("name")?,
+            summary: row.get("summary")?,
+            courseid: row.get("courseid")?,
+            timemodified: row.get("timemodified")?,
+            modules: Vec::new(), // empty vector
         })
     }
 }
 
-pub fn get_all_files(conn: &mut rusqlite::Connection) -> Result<Vec<CourseFile>> {
+impl Retrievable for CourseModule {
+    fn select_query() -> &'static str {
+        "SELECT moduleid, name, instance, contextid, description, timemodified, section_id
+            FROM Modules WHERE section_id = ?1"
+    }
+
+    fn select_query_all() -> &'static str {
+        "SELECT moduleid, name, instance, contextid, description, timemodified, section_id
+            FROM Modules"
+    }
+
+    fn from_row(row: &Row) -> Result<Self> {
+        Ok(CourseModule {
+            id: row.get("moduleid")?,
+            name: row.get("name")?,
+            instance: row.get("instance")?,
+            contextid: row.get("contextid")?,
+            description: row.get("description")?,
+            contents: Some(Vec::new()), // empty vector
+            timemodified: row.get("timemodified")?,
+            section_id: row.get("section_id")?,
+        })
+    }
+}
+
+impl Retrievable for CourseFile {
+    fn select_query() -> &'static str {
+        "SELECT filename, fileurl, localpath, timemodified, module_id
+            FROM Files WHERE module_id = ?1"
+    }
+
+    fn select_query_all() -> &'static str {
+        "SELECT filename, fileurl, localpath, timemodified, module_id
+            FROM Files"
+    }
+
+    fn from_row(row: &Row) -> Result<Self> {
+        Ok(CourseFile {
+            filename: row.get("filename")?,
+            fileurl: row.get("fileurl")?,
+            filepath: row.get("localpath")?,
+            timemodified: row.get("timemodified")?,
+            module_id: row.get("module_id")?,
+        })
+    }
+}
+
+pub fn retrieve_course_structure(
+    conn: &mut Connection,
+    courseid: i64
+) -> Result<Vec<CourseSection>> {
+    log::info!("Retrieving course structure");
+
+    let tx = conn.transaction().map_err(|e| {
+        log::error!("Failed to start transaction: {:?}", e);
+        e
+    })?;
+
+    log::info!("Transaction started");
+
+    let mut sections: Vec<CourseSection> = retrieve_param(&tx, params![courseid])?;
+
+    for section in sections.iter_mut() {
+
+        let mut modules: Vec<CourseModule> =
+            retrieve_param(&tx, params![section.id])?;
+
+        for module in modules.iter_mut() {
+            let files: Vec<CourseFile> = retrieve_param(&tx, params![module.id])?;
+            if !files.is_empty() {
+                module.contents = Some(files);
+            }
+        }
+        section.modules = modules.clone();
+    }
+
+    tx.commit().map_err(|e| {
+        log::error!("Failed to commit transaction: {:?}", e);
+        e
+    })?;
+
+    Ok(sections)
+}
+
+pub fn get_all_files(conn: &mut Connection) -> Result<Vec<CourseFile>> {
     let tx = conn.transaction()?;
     let files = generic_retrieve(&tx)?;
 

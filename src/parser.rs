@@ -1,93 +1,80 @@
-use crate::models::course_details::ParseCourseDetails;
+use crate::models::course::CourseSection;
 use eyre::Result;
-use serde_json;
-use std::{
-    fs::{self, File as StdFile},
-    io::Write,
-};
+use html2md::parse_html;
+use std::{fs::File as StdFile, io::Write};
 
-fn convert_to_markdown(course_details: ParseCourseDetails) -> String {
+pub fn parse(course: Vec<CourseSection>) -> String {
     let mut markdown = String::new();
 
-    for section in course_details.sections {
-        if let Some(section_name) = &section.section_name {
-            markdown.push_str(&format!("# {}", section_name));
-        }
-        if let Some(section_summary) = &section.section_summary {
-            markdown.push_str(&format!("\n{}", section_summary));
-        }
+    course.into_iter().for_each(|section| {
+        log::info!("Section name: {}", section.name);
 
-        for module in section.modules {
-            if let Some(module_name) = &module.module_name {
-                markdown.push_str(&format!("\n## {}\n", module_name));
+        markdown.push_str(&format!("# {}\n", section.name));
+        let summary = clean_html(&section.summary);
+        markdown.push_str(&format!("{}\n\n", parse_html(&summary)));
+
+        let mut is_first_module = true;
+
+        section.modules.into_iter().for_each(|module| {
+            // log::info!("Module name: {}", module.name);
+
+            if is_first_module {
+                markdown.push_str(&format!("## {}\n", module.name));
+                is_first_module = false;
+            } else {
+                markdown.push_str(&format!("### {}\n", module.name));
             }
-            if let Some(module_description) = &module.module_description {
-                if !markdown.contains(module_description) {
-                    markdown.push_str(&format!("{}\n\n", module_description));
+
+            if let Some(desc) = &module.description {
+                let desc = clean_html(&desc);
+                if desc.trim() != module.name.trim() {
+                    markdown.push_str(&format!("{}\n\n", parse_html(&desc)));
                 }
             }
-            for page in module.pages {
-                if let Some(page_content) = &page.page_content {
-                    if !markdown.contains(page_content) {
-                        markdown.push_str(&format!("{}\n\n", page_content));
-                    }
-                }
-                for file in &page.files {
-                    if let Some(file_filename) = &file.file_filename {
-                        if let Some(file_localpath) = &file.file_localpath {
-                            if let Some(stripped_localpath) = file_localpath.strip_prefix("out/") {
-                                markdown.push_str(&format!("\n[{}]", file_filename));
-                                markdown.push_str(&format!("({})\n\n", stripped_localpath));
+
+            match module.contents {
+                Some(files) => {
+                    files.into_iter().for_each(|file| {
+                        if let Some(name) = &file.filename {
+                            if let Some(path) = &file.filepath {
+                                // log::info!("Module file: {} at {}", name, path);
+                                markdown.push_str(&format!("\n[{}]", name));
+                                markdown.push_str(&format!("({})\n\n", path));
+                            } else if let Some(url) = &file.fileurl {
+                                markdown.push_str(&format!("\n[{}]", name));
+                                markdown.push_str(&format!("({})\n\n", url));
                             }
-                        } else if let Some(file_fileurl) = &file.file_fileurl {
-                            markdown.push_str(&format!("\n[{}]", file_filename));
-                            markdown.push_str(&format!("({})\n\n", file_fileurl));
                         }
-                    }
+                    });
                 }
+                _ => (),
             }
-            for content in &module.content {
-                if let Some(content_filename) = &content.content_filename {
-                    if !content_filename.contains("index.html") {
-                        if let Some(content_localpath) = &content.content_localpath {
-                            if let Some(stripped_localpath) = content_localpath.strip_prefix("out/")
-                            {
-                                markdown.push_str(&format!("[{}]", content_filename));
-                                markdown.push_str(&format!("({})\n\n", stripped_localpath));
-                            }
-                        } else if let Some(content_fileurl) = &content.content_fileurl {
-                            markdown.push_str(&format!("[{}]", content_filename));
-                            markdown.push_str(&format!("({})\n\n", content_fileurl));
-                        }
-                    }
-                }
-            }
-        }
-        markdown.push_str("\n---");
-        markdown.push_str("\n\n");
-    }
-
-    if let Some(course_id) = course_details.courseid {
-        log::info!("Parsed course {:?}", course_id);
-    }
-
+        });
+    });
     markdown
 }
 
-pub fn save_markdown_to_file(json_data: &str, file_path: &str) -> Result<()> {
-    let parsed_course_details: ParseCourseDetails = serde_json::from_str(json_data)?;
-    let markdown_data = convert_to_markdown(parsed_course_details);
+pub fn save_markdown_to_file(parsed_course: String, file_path: &str) -> Result<()> {
+    let file_path = format!("{}.md", file_path);
+    let mut file = StdFile::create(file_path)?;
+    Ok(file.write_all(parsed_course.as_bytes())?)
+}
 
-    let file_path_with_extension = format!("{}.md", file_path);
+pub fn clean_html(html: &String) -> String {
 
-    if let Some(parent_dir) = std::path::Path::new(&file_path_with_extension).parent() {
-        if !parent_dir.exists() {
-            fs::create_dir_all(parent_dir)?;
-        }
-    }
+    let mut clean_html = html.replace("<h5></h5>", "");
+    clean_html = clean_html.replace(" dir=\"ltr\" style=\"text-align: left;\"", "");
+    clean_html = clean_html.replace("<h5>", "");
+    clean_html = clean_html.replace("</h5>", "");
+    clean_html = clean_html.replace("<br>", "");
+    clean_html = clean_html.replace("</ br>", "");
+    clean_html = clean_html.replace("<br />", "");
+    clean_html = clean_html.replace("\r", "");
 
-    let mut file = StdFile::create(file_path_with_extension)?;
-    file.write_all(markdown_data.as_bytes())?;
 
-    Ok(())
+    clean_html = clean_html.replace("<h4></h4>", "");
+    clean_html = clean_html.replace("<p></p>", "");
+    clean_html = clean_html.replace("<b></b>", "");
+
+    clean_html.to_string()
 }
