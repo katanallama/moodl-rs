@@ -170,7 +170,6 @@ impl Insertable for CourseFile {
         vec![
             (":filename", &self.filename),
             (":fileurl", &self.fileurl),
-            (":filepath", &self.filepath),
             (":timemodified", &self.timemodified),
             (":module_id", &self.module_id),
         ]
