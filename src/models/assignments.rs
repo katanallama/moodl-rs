@@ -20,7 +20,6 @@ pub struct Assignment {
     pub name: String,
     pub duedate: i64,
     pub allowsubmissionsfromdate: i64,
-    // pub grade: Option<i32>,
     pub timemodified: i64,
     pub cutoffdate: i64,
     pub intro: Option<String>,

@@ -73,7 +73,6 @@ pub fn generic_retrieve<T: Retrievable>(tx: &Transaction) -> Result<Vec<T>> {
         results.push(T::from_row(row)?);
     }
 
-
     Ok(results)
 }
 
@@ -93,6 +92,26 @@ pub fn retrieve_param<T: Retrievable>(tx: &Transaction, params: &[&(dyn ToSql)])
 }
 
 pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
+        conn.execute(
+        "CREATE TABLE IF NOT EXISTS Assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assignid INTEGER,
+            cmid INTEGER,
+            course INTEGER,
+            name TEXT,
+            duedate DATETIME,
+            submissionsopen DATETIME,
+            timemodified DATETIME,
+            cutoffdate DATETIME,
+            intro TEXT,
+            lastfetched DATETIME,
+            courseid INTEGER,
+            UNIQUE(assignid)
+        );",
+        (),
+    )
+    .wrap_err("Failed to create Sections table")?;
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS Grades (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
