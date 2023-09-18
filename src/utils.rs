@@ -79,7 +79,8 @@ pub fn setup_logger() -> Result<(), InitError> {
                 message
             ))
         })
-        .level(log::LevelFilter::Debug)
+        // .level(log::LevelFilter::Debug)
+        .level(log::LevelFilter::Info)
         .level_for("html5ever", log::LevelFilter::Warn)
         .level_for("selectors", log::LevelFilter::Warn)
         .chain(std::io::stdout())

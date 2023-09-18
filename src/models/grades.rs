@@ -42,6 +42,7 @@ pub fn insert_grades(conn: &mut Connection, mut course_grades: Vec<CourseGrades>
     }
 
     tx.commit()?;
+    log::info!("Sucessfully stored course grades");
     Ok(())
 }
 

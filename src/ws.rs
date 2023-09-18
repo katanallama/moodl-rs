@@ -11,10 +11,10 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::{cmp::min, fs::File, io::Write};
 
-const _GET_ASSIGNMENTS: &str = "mod_assign_get_assignments"; // TODO implement db
+const GET_ASSIGNMENTS: &str = "mod_assign_get_assignments";
 const GET_CONTENTS: &str = "core_course_get_contents";
 const GET_COURSES: &str = "core_enrol_get_users_courses";
-const _GET_GRADES: &str = "gradereport_user_get_grade_items"; // TODO implement db
+const GET_GRADES: &str = "gradereport_user_get_grade_items";
 const GET_PAGES: &str = "mod_page_get_pages_by_courses";
 const GET_UID: &str = "core_webservice_get_site_info";
 
@@ -64,6 +64,7 @@ pub struct QueryParameters<'a> {
 
 impl<'a> QueryParameters<'a> {
     pub fn new(client: &'a ApiClient) -> Self {
+        log::debug!("New API query created");
         QueryParameters {
             wsfunction: None,
             courseid: None,
@@ -95,9 +96,26 @@ impl<'a> QueryParameters<'a> {
     }
 }
 
+pub trait ApiQuery: Serialize {
+    fn with_token(self, token: &str) -> Self;
+    fn with_userid(self, userid: Option<i64>) -> Self;
+}
+
+impl ApiQuery for QueryParameters<'_> {
+    fn with_token(mut self, token: &str) -> Self {
+        self.wstoken = token.to_string();
+        self
+    }
+
+    fn with_userid(mut self, userid: Option<i64>) -> Self {
+        self.userid = userid;
+        self
+    }
+}
+
 impl ApiClient {
     pub fn new(base_url: &str, token: &str, userid: &i64) -> Self {
-        log::info!("New API Client created");
+        log::debug!("New API Client created");
         ApiClient {
             base_url: base_url.to_string(),
             wstoken: token.to_string(),
@@ -131,18 +149,19 @@ impl ApiClient {
             .await?;
 
         let response_text = response.text().await?;
-        // log::debug!("API Response: {}", &response_text);
+        log::debug!("API Response: {}", &response_text);
 
         // First, try to parse the response as an ApiError
         if let Ok(api_error) = serde_json::from_str::<ApiError>(&response_text) {
-            return Err(eyre::eyre!("API Error: {:?}", api_error));
+            log::debug!("API Error:\n {:#?}", api_error);
+            // return Err(eyre::eyre!("API Error: {:?}", api_error));
         }
 
         // If parsing as ApiError failed, try to parse it as an ApiResponse
         match serde_json::from_str::<ApiResponse>(&response_text) {
             Ok(api_response) => Ok(api_response),
             Err(_) => Err(eyre::eyre!(
-                "Failed to parse API response: {:?}",
+                "Failed to parse API response: {:#?}",
                 response_text
             )),
         }
@@ -195,6 +214,7 @@ impl ApiClient {
     }
 
     pub async fn fetch_course_contents(&self, course_id: i64) -> Result<ApiResponse> {
+        log::info!("Fetching course {} content", course_id);
         let query = QueryParameters::new(self)
             .function(GET_CONTENTS)
             .courseid(course_id);
@@ -202,25 +222,28 @@ impl ApiClient {
     }
 
     pub async fn fetch_course_grades(&self, course_id: i64) -> Result<ApiResponse> {
+        log::info!("Fetching course {} grades", course_id);
         let query = QueryParameters::new(self)
-            .function(_GET_GRADES)
+            .function(GET_GRADES)
             .courseid(course_id)
             .use_default_userid();
         self.fetch(query).await
     }
 
     pub async fn fetch_course_pages(&self) -> Result<ApiResponse> {
+        log::info!("Fetching course pages");
         let query = QueryParameters::new(self).function(GET_PAGES);
         self.fetch(query).await
     }
 
     pub async fn fetch_assignments(&self) -> Result<ApiResponse> {
-        let query = QueryParameters::new(self)
-            .function(_GET_ASSIGNMENTS);
+        log::info!("Fetching assignments");
+        let query = QueryParameters::new(self).function(GET_ASSIGNMENTS);
         self.fetch(query).await
     }
 
     pub async fn fetch_user_courses(&self) -> Result<ApiResponse> {
+        log::info!("Fetching user courses");
         let query = QueryParameters::new(self)
             .function(GET_COURSES)
             .use_default_userid();
@@ -228,24 +251,9 @@ impl ApiClient {
     }
 
     pub async fn fetch_user_id(&self) -> Result<ApiResponse> {
+        log::info!("Fetching user id");
         let query = QueryParameters::new(self).function(GET_UID);
         self.fetch(query).await
     }
 }
 
-pub trait ApiQuery: Serialize {
-    fn with_token(self, token: &str) -> Self;
-    fn with_userid(self, userid: Option<i64>) -> Self;
-}
-
-impl ApiQuery for QueryParameters<'_> {
-    fn with_token(mut self, token: &str) -> Self {
-        self.wstoken = token.to_string();
-        self
-    }
-
-    fn with_userid(mut self, userid: Option<i64>) -> Self {
-        self.userid = userid;
-        self
-    }
-}

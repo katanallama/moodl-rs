@@ -103,6 +103,7 @@ pub fn insert_course_sections(
     }
 
     tx.commit()?;
+    log::info!("Sucessfully stored course {} content", courseid);
     Ok(())
 }
 
@@ -261,14 +262,13 @@ pub fn retrieve_course_structure(
     conn: &mut Connection,
     courseid: i64,
 ) -> Result<Vec<CourseSection>> {
-    log::info!("Retrieving course structure");
-
+    log::debug!("Retrieving course {}", courseid);
     let tx = conn.transaction().map_err(|e| {
         log::error!("Failed to start transaction: {:?}", e);
         e
     })?;
 
-    log::info!("Transaction started");
+    log::debug!("Transaction started");
 
     let mut sections: Vec<CourseSection> = retrieve_param(&tx, params![courseid])?;
 
@@ -289,6 +289,7 @@ pub fn retrieve_course_structure(
         e
     })?;
 
+    log::info!("Successfully retrieved course {}", courseid);
     Ok(sections)
 }
 

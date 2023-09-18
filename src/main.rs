@@ -1,6 +1,5 @@
 // main.rs
 //
-#![feature(string_remove_matches)]
 mod commands;
 mod db;
 mod downloader;
@@ -38,15 +37,12 @@ enum UserCommand {
 async fn main() -> Result<()> {
     setup_logger().expect("Failed to initialize logging");
     initialize_db()?;
-
-    let mut config = Configs::new()?;
     let skin = make_skin();
+    let mut config = Configs::new()?;
     let command_enum = prompt_command(&skin)?;
-
     let client;
 
     let mut command: Box<dyn Command>;
-
     command = match command_enum {
         UserCommand::Init => Box::new(InitCommand::new(&mut config, &skin)),
         UserCommand::Fetch => {
