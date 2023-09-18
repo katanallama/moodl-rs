@@ -94,6 +94,28 @@ pub fn retrieve_param<T: Retrievable>(tx: &Transaction, params: &[&(dyn ToSql)])
 
 pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
     conn.execute(
+        "CREATE TABLE IF NOT EXISTS Grades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gradeid INTEGER,
+            name TEXT,
+            instance INTEGER,
+            cmid INTEGER,
+            graderaw INTEGER,
+            gradedatesubmitted DATETIME,
+            gradedategraded DATETIME,
+            grademin INTEGER,
+            grademax INTEGER,
+            feedback TEXT,
+            summary TEXT,
+            lastfetched DATETIME,
+            courseid INTEGER,
+            UNIQUE(gradeid)
+        );",
+        (),
+    )
+    .wrap_err("Failed to create Sections table")?;
+
+    conn.execute(
         "CREATE TABLE IF NOT EXISTS Sections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sectionid INTEGER,
