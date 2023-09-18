@@ -132,8 +132,8 @@ impl Insertable for CourseSection {
 
 impl Insertable for CourseModule {
     fn insert_query() -> &'static str {
-        "INSERT INTO Modules (moduleid, name, instance, contextid, description, content, section_id, timemodified, lastfetched)
-            VALUES (:moduleid, :name, :instance, :contextid, :description, :content, :section_id, :timemodified, CURRENT_TIMESTAMP)
+        "INSERT INTO Modules (moduleid, name, instance, contextid, description, section_id, timemodified, lastfetched)
+            VALUES (:moduleid, :name, :instance, :contextid, :description, :section_id, :timemodified, CURRENT_TIMESTAMP)
             ON CONFLICT(moduleid) DO UPDATE SET
                 name=excluded.name,
                 instance=excluded.instance,
