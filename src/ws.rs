@@ -121,18 +121,6 @@ impl ApiClient {
         ))
     }
 
-    pub async fn _fetch_text<T: ApiQuery>(&self, query: T) -> Result<String> {
-        let base_url = format!("https://{}/webservice/rest/server.php", &self.base_url);
-        let response = self
-            .client
-            .get(base_url)
-            .query(&query.with_token(&self.wstoken))
-            .send()
-            .await?;
-
-        Ok(response.text().await?)
-    }
-
     pub async fn fetch<T: ApiQuery>(&self, query: T) -> Result<ApiResponse> {
         let base_url = format!("https://{}/webservice/rest/server.php", &self.base_url);
         let response = self
@@ -143,6 +131,7 @@ impl ApiClient {
             .await?;
 
         let response_text = response.text().await?;
+        // log::debug!("API Response: {}", &response_text);
 
         // First, try to parse the response as an ApiError
         if let Ok(api_error) = serde_json::from_str::<ApiError>(&response_text) {
