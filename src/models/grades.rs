@@ -4,25 +4,25 @@ use {serde::Deserialize, serde::Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserGrade {
-    courseid: u32,
-    userid: u32,
+    courseid: i64,
+    userid: i64,
     gradeitems: Vec<GradeItem>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct GradeItem {
-    id: u32,
+    id: i64,
     itemname: Option<String>,
-    itemmodule: Option<String>,
-    iteminstance: u32,
-    itemnumber: Option<u32>,
-    idnumber: Option<String>,
-    categoryid: Option<u32>,
-    cmid: Option<u32>,
-    graderaw: Option<String>,
-    gradedatesubmitted: Option<String>,
-    gradedategraded: Option<String>,
-    grademin: u32,
-    grademax: u32,
-    feedback: String,
+    // itemmodule: Option<String>,
+    iteminstance: i64,
+    itemnumber: Option<i64>,
+    // idnumber: Option<String>,
+    categoryid: Option<i64>,
+    cmid: Option<i64>,
+    graderaw: Option<i64>,
+    gradedatesubmitted: Option<i64>,
+    gradedategraded: Option<i64>,
+    grademin: Option<i64>,
+    grademax: Option<i64>,
+    feedback: Option<String>,
 }

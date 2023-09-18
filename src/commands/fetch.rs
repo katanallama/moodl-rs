@@ -3,7 +3,10 @@
 use {
     crate::commands::command::Command,
     crate::db::connect_db,
-    crate::models::{configs::*,course::{Pages, insert_course_sections}},
+    crate::models::{
+        configs::*,
+        course::{insert_course_sections, Pages},
+    },
     crate::ws::*,
 };
 use {async_trait::async_trait, eyre::Result, rusqlite::Connection};
@@ -27,9 +30,35 @@ impl<'a> Command for FetchCommand<'a> {
 
         let pages = fetch_page_handler(&mut self.client).await?;
         fetch_course_handler(&mut self.client, &mut conn, &self.config, pages).await?;
+        fetch_assignment_handler(&mut self.client).await?;
+        fetch_grade_handler(&mut self.client, &self.config).await?;
 
         Ok(())
     }
+}
+
+// TODO implement the db stuff for this
+pub async fn fetch_assignment_handler(client: &ApiClient) -> Result<()> {
+    let response = client.fetch_assignments().await?;
+    if let ApiResponse::Assignments(assignments) = response {
+        log::debug!("{:#?}", assignments);
+    } else {
+        return Err(eyre::eyre!("Unexpected API response: {:?}", response));
+    }
+    Ok(())
+}
+
+// TODO implement the db stuff for this
+pub async fn fetch_grade_handler(client: &ApiClient, config: &Configs) -> Result<()> {
+    for course in &config.courses {
+        let response = client.fetch_course_grades(course.id).await?;
+        if let ApiResponse::UserGrades(grades) = response {
+            log::debug!("{:#?}", grades);
+        } else {
+            return Err(eyre::eyre!("Unexpected API response: {:?}", response));
+        }
+    }
+    Ok(())
 }
 
 pub async fn fetch_page_handler(client: &ApiClient) -> Result<Pages> {

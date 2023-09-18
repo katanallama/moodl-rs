@@ -7,32 +7,32 @@ pub struct Assignments {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Course {
-    pub id: u32,
-    pub timemodified: u64,
+    pub id: i64,
+    pub timemodified: i64,
     pub assignments: Vec<Assignment>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Assignment {
-    pub id: u32,
-    pub cmid: u32,
-    pub course: u32,
+    pub id: i64,
+    pub cmid: i64,
+    pub course: i64,
     pub name: String,
-    pub duedate: u64,
-    pub allowsubmissionsfromdate: u64,
+    pub duedate: i64,
+    pub allowsubmissionsfromdate: i64,
     // pub grade: Option<i32>,
-    pub timemodified: u64,
-    pub cutoffdate: u64,
+    pub timemodified: i64,
+    pub cutoffdate: i64,
     pub intro: Option<String>,
-    // pub introfiles: Vec<String>, // This might be a different type depending on the data structure
-    pub introattachments: Option<Vec<IntroAttachment>>,
+    pub introfiles: Vec<File>,
+    pub introattachments: Option<Vec<File>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct IntroAttachment {
+pub struct File {
     pub filename: String,
     pub filepath: String,
-    pub filesize: u64,
+    pub filesize: i64,
     pub fileurl: String,
-    pub timemodified: u64,
+    pub timemodified: i64,
 }

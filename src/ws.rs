@@ -201,11 +201,11 @@ impl ApiClient {
         self.fetch(query).await
     }
 
-    // TODO implement the db stuff for this
-    pub async fn _fetch_course_grades(&self, course_id: i64) -> Result<ApiResponse> {
+    pub async fn fetch_course_grades(&self, course_id: i64) -> Result<ApiResponse> {
         let query = QueryParameters::new(self)
             .function(_GET_GRADES)
-            .courseid(course_id);
+            .courseid(course_id)
+            .use_default_userid();
         self.fetch(query).await
     }
 
@@ -214,11 +214,9 @@ impl ApiClient {
         self.fetch(query).await
     }
 
-    // TODO implement the db stuff for this
-    pub async fn _fetch_user_assignments(&self, course_id: i64) -> Result<ApiResponse> {
+    pub async fn fetch_assignments(&self) -> Result<ApiResponse> {
         let query = QueryParameters::new(self)
-            .function(_GET_ASSIGNMENTS)
-            .courseid(course_id);
+            .function(_GET_ASSIGNMENTS);
         self.fetch(query).await
     }
 
