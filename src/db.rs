@@ -116,8 +116,12 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
         "CREATE TABLE IF NOT EXISTS Grades (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             gradeid INTEGER,
-            name TEXT,
-            instance INTEGER,
+            itemname TEXT,
+            itemmodule TEXT,
+            iteminstance INTEGER,
+            itemnumber INTEGER,
+            idnumber TEXT,
+            categoryid INTEGER,
             cmid INTEGER,
             graderaw INTEGER,
             gradedatesubmitted DATETIME,
@@ -125,7 +129,6 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
             grademin INTEGER,
             grademax INTEGER,
             feedback TEXT,
-            summary TEXT,
             lastfetched DATETIME,
             courseid INTEGER,
             UNIQUE(gradeid)

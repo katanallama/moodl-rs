@@ -2,7 +2,7 @@
 //
 use crate::models::{
     assignments::Assignments, configs::Configs, course::CourseSection, course::Pages,
-    courses::Course, grades::UserGrade, user::SiteInfo,
+    courses::Course, grades::CourseGrades, user::SiteInfo,
 };
 use eyre::Result;
 use futures_util::StreamExt;
@@ -40,7 +40,7 @@ pub enum ApiResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserGradesResponse {
-    usergrades: Vec<UserGrade>,
+    pub usergrades: Vec<CourseGrades>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

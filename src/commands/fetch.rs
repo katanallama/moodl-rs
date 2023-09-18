@@ -6,6 +6,7 @@ use {
     crate::models::{
         configs::*,
         course::{insert_course_sections, Pages},
+        grades::insert_grades,
     },
     crate::ws::*,
 };
@@ -48,12 +49,13 @@ pub async fn fetch_assignment_handler(client: &ApiClient) -> Result<()> {
     Ok(())
 }
 
-// TODO implement the db stuff for this
 pub async fn fetch_grade_handler(client: &ApiClient, config: &Configs) -> Result<()> {
     for course in &config.courses {
+        let mut conn = connect_db()?;
         let response = client.fetch_course_grades(course.id).await?;
         if let ApiResponse::UserGrades(grades) = response {
-            log::debug!("{:#?}", grades);
+            // log::debug!("{:#?}", grades);
+            insert_grades(&mut conn, grades.usergrades)?;
         } else {
             return Err(eyre::eyre!("Unexpected API response: {:?}", response));
         }
