@@ -32,9 +32,8 @@ impl<'a> Command for ParseCommand<'a> {
 pub fn parse_command_handler(config: &Configs) -> Result<()> {
     for course in &config.courses {
         let conn = connect_db();
-        let structure = retrieve_course_structure(&mut conn.unwrap(), course.id);
-
-        let course_md = parse(structure.unwrap());
+        let structure = retrieve_course_structure(&mut conn.unwrap(), course.id)?;
+        let course_md = parse(structure);
 
         let mut file_path = home_dir();
         if let Some(course_path) = config.get_course_path(course.id){
