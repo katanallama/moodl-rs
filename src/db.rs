@@ -100,7 +100,6 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
             name TEXT,
             summary TEXT,
             lastfetched DATETIME,
-            timemodified DATETIME,
             courseid INTEGER,
             UNIQUE(sectionid)
         );",
@@ -118,7 +117,6 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
             description TEXT,
             lastfetched DATETIME,
             section_id INTEGER,
-            timemodified DATETIME,
             UNIQUE(moduleid),
             FOREIGN KEY (section_id) REFERENCES Sections(sectionid)
         );",

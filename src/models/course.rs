@@ -3,9 +3,9 @@
 use crate::db::retrieve_param;
 use crate::db::{generic_insert, generic_retrieve, Insertable, Retrievable};
 use eyre::Result;
+use rusqlite::{params, Connection, Row, ToSql};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use rusqlite::{Connection, ToSql, Row, params};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CourseSection {
@@ -13,7 +13,6 @@ pub struct CourseSection {
     pub name: String,
     pub summary: String,
     pub courseid: Option<i64>,
-    pub timemodified: Option<i64>,
     pub modules: Vec<CourseModule>,
 }
 
@@ -25,7 +24,6 @@ pub struct CourseModule {
     pub contextid: Option<i64>,
     pub description: Option<String>,
     pub contents: Option<Vec<CourseFile>>,
-    pub timemodified: Option<i64>,
     pub section_id: Option<i64>,
 }
 
@@ -110,41 +108,52 @@ pub fn insert_course_sections(
 
 impl Insertable for CourseSection {
     fn insert_query() -> &'static str {
-        "INSERT INTO Sections (sectionid, name, summary, courseid, timemodified, lastfetched)
-            VALUES (:sectionid, :name, :summary, :courseid, :timemodified, CURRENT_TIMESTAMP)
+        "INSERT INTO Sections (sectionid, name, summary, courseid, lastfetched)
+            VALUES (:sectionid, :name, :summary, :courseid, CURRENT_TIMESTAMP)
             ON CONFLICT(sectionid) DO UPDATE SET
                 name=excluded.name,
                 summary=excluded.summary,
-                timemodified=excluded.timemodified,
                 lastfetched=excluded.lastfetched"
     }
 
     fn bind_parameters(&self) -> Vec<(&'static str, &dyn ToSql)> {
+        log::debug!("Binding parameters for CourseSection");
+        log::debug!("sectionid: {}", &self.id);
+        log::debug!("name: {}", &self.name);
+        log::debug!("summary: {}", &self.summary);
+        log::debug!("courseid: {:?}", &self.courseid);
+
         vec![
             (":sectionid", &self.id),
             (":name", &self.name),
             (":summary", &self.summary),
             (":courseid", &self.courseid),
-            (":timemodified", &self.timemodified),
         ]
     }
 }
 
 impl Insertable for CourseModule {
     fn insert_query() -> &'static str {
-        "INSERT INTO Modules (moduleid, name, instance, contextid, description, section_id, timemodified, lastfetched)
-            VALUES (:moduleid, :name, :instance, :contextid, :description, :section_id, :timemodified, CURRENT_TIMESTAMP)
+        "INSERT INTO Modules (moduleid, name, instance, contextid, description, section_id, lastfetched)
+            VALUES (:moduleid, :name, :instance, :contextid, :description, :section_id, CURRENT_TIMESTAMP)
             ON CONFLICT(moduleid) DO UPDATE SET
                 name=excluded.name,
                 instance=excluded.instance,
                 contextid=excluded.contextid,
                 description=excluded.description,
                 section_id=excluded.section_id,
-                timemodified=excluded.timemodified,
                 lastfetched=excluded.lastfetched"
     }
 
     fn bind_parameters(&self) -> Vec<(&'static str, &dyn ToSql)> {
+        log::debug!("Binding parameters for CourseModule");
+        log::debug!("moduleid: {}", &self.id);
+        log::debug!("name: {}", &self.name);
+        log::debug!("instance: {:?}", &self.instance);
+        log::debug!("contextid: {:?}", &self.contextid);
+        log::debug!("description: {:?}", &self.description);
+        log::debug!("section_id: {:?}", &self.section_id);
+
         vec![
             (":moduleid", &self.id),
             (":name", &self.name),
@@ -152,7 +161,6 @@ impl Insertable for CourseModule {
             (":contextid", &self.contextid),
             (":description", &self.description),
             (":section_id", &self.section_id),
-            (":timemodified", &self.timemodified),
         ]
     }
 }
@@ -167,6 +175,12 @@ impl Insertable for CourseFile {
     }
 
     fn bind_parameters(&self) -> Vec<(&'static str, &dyn ToSql)> {
+        log::debug!("Binding parameters for CourseFile");
+        log::debug!("filename: {:?}", &self.filename);
+        log::debug!("fileurl: {:?}", &self.fileurl);
+        log::debug!("timemodified: {:?}", &self.timemodified);
+        log::debug!("module_id: {:?}", &self.module_id);
+
         vec![
             (":filename", &self.filename),
             (":fileurl", &self.fileurl),
@@ -178,11 +192,11 @@ impl Insertable for CourseFile {
 
 impl Retrievable for CourseSection {
     fn select_query() -> &'static str {
-        "SELECT sectionid, name, summary, courseid, timemodified
+        "SELECT sectionid, name, summary, courseid
             FROM Sections WHERE courseid = ?1"
     }
     fn select_query_all() -> &'static str {
-        "SELECT sectionid, name, summary, courseid, timemodified
+        "SELECT sectionid, name, summary, courseid
             FROM Sections"
     }
 
@@ -192,7 +206,6 @@ impl Retrievable for CourseSection {
             name: row.get("name")?,
             summary: row.get("summary")?,
             courseid: row.get("courseid")?,
-            timemodified: row.get("timemodified")?,
             modules: Vec::new(), // empty vector
         })
     }
@@ -200,12 +213,12 @@ impl Retrievable for CourseSection {
 
 impl Retrievable for CourseModule {
     fn select_query() -> &'static str {
-        "SELECT moduleid, name, instance, contextid, description, timemodified, section_id
+        "SELECT moduleid, name, instance, contextid, description, section_id
             FROM Modules WHERE section_id = ?1"
     }
 
     fn select_query_all() -> &'static str {
-        "SELECT moduleid, name, instance, contextid, description, timemodified, section_id
+        "SELECT moduleid, name, instance, contextid, description,section_id
             FROM Modules"
     }
 
@@ -217,7 +230,6 @@ impl Retrievable for CourseModule {
             contextid: row.get("contextid")?,
             description: row.get("description")?,
             contents: Some(Vec::new()), // empty vector
-            timemodified: row.get("timemodified")?,
             section_id: row.get("section_id")?,
         })
     }
@@ -247,7 +259,7 @@ impl Retrievable for CourseFile {
 
 pub fn retrieve_course_structure(
     conn: &mut Connection,
-    courseid: i64
+    courseid: i64,
 ) -> Result<Vec<CourseSection>> {
     log::info!("Retrieving course structure");
 
@@ -261,9 +273,7 @@ pub fn retrieve_course_structure(
     let mut sections: Vec<CourseSection> = retrieve_param(&tx, params![courseid])?;
 
     for section in sections.iter_mut() {
-
-        let mut modules: Vec<CourseModule> =
-            retrieve_param(&tx, params![section.id])?;
+        let mut modules: Vec<CourseModule> = retrieve_param(&tx, params![section.id])?;
 
         for module in modules.iter_mut() {
             let files: Vec<CourseFile> = retrieve_param(&tx, params![module.id])?;
