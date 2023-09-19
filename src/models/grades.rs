@@ -1,8 +1,8 @@
 // models/grades.rs
 //
-use crate::db::{generic_insert, Insertable, Retrievable};
+use crate::db::{generic_insert, retrieve_param, Insertable, Retrievable};
 use eyre::Result;
-use rusqlite::{Connection, Row, ToSql};
+use rusqlite::{params, Connection, Row, ToSql};
 use {serde::Deserialize, serde::Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -14,20 +14,20 @@ pub struct CourseGrades {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GradeItem {
-    id: i64,
-    itemname: Option<String>,
-    itemmodule: Option<String>,
-    iteminstance: i64,
-    itemnumber: Option<i64>,
-    idnumber: Option<String>,
-    categoryid: Option<i64>,
-    cmid: Option<i64>,
-    graderaw: Option<i64>,
-    gradedatesubmitted: Option<i64>,
-    gradedategraded: Option<i64>,
-    grademin: i64,
-    grademax: i64,
-    feedback: Option<String>,
+    pub id: i64,
+    pub itemname: Option<String>,
+    pub itemmodule: Option<String>,
+    pub iteminstance: i64,
+    pub itemnumber: Option<i64>,
+    pub idnumber: Option<String>,
+    pub categoryid: Option<i64>,
+    pub cmid: Option<i64>,
+    pub graderaw: Option<i64>,
+    pub gradedatesubmitted: Option<i64>,
+    pub gradedategraded: Option<i64>,
+    pub grademin: i64,
+    pub grademax: i64,
+    pub feedback: Option<String>,
     pub courseid: Option<i64>,
 }
 
@@ -115,17 +115,19 @@ impl Insertable for GradeItem {
 
 impl Retrievable for GradeItem {
     fn select_query() -> &'static str {
-        "SELECT gradeid, itemname, courseid
+        "SELECT gradeid, itemname, itemmodule, iteminstance, itemnumber, idnumber, categoryid, cmid,
+            graderaw, gradedatesubmitted, gradedategraded, grademin, grademax, feedback, courseid
             FROM Grades WHERE courseid = ?1"
     }
     fn select_query_all() -> &'static str {
-        "SELECT gradeid, itemname, courseid
+        "SELECT gradeid, itemname, itemmodule, iteminstance, itemnumber, idnumber, categoryid, cmid,
+            graderaw, gradedatesubmitted, gradedategraded, grademin, grademax, feedback, courseid
             FROM Grades"
     }
 
     fn from_row(row: &Row) -> Result<Self> {
         Ok(GradeItem {
-            id: row.get("assignid")?,
+            id: row.get("gradeid")?,
             itemname: row.get("itemname")?,
             itemmodule: row.get("itemmodule")?,
             iteminstance: row.get("iteminstance")?,
@@ -142,4 +144,24 @@ impl Retrievable for GradeItem {
             courseid: row.get("courseid")?,
         })
     }
+}
+
+pub fn retrieve_course_grades(conn: &mut Connection, courseid: i64) -> Result<Vec<GradeItem>> {
+    log::debug!("Retrieving course {} grades", courseid);
+    let tx = conn.transaction().map_err(|e| {
+        log::error!("Failed to start transaction: {:?}", e);
+        e
+    })?;
+
+    log::debug!("Transaction started");
+
+    let grades: Vec<GradeItem> = retrieve_param(&tx, params![courseid])?;
+
+    tx.commit().map_err(|e| {
+        log::error!("Failed to commit transaction: {:?}", e);
+        e
+    })?;
+
+    log::info!("Successfully retrieved course {} grades", courseid);
+    Ok(grades)
 }

@@ -1,7 +1,6 @@
 // models/course.rs
 //
-use crate::db::retrieve_param;
-use crate::db::{generic_insert, generic_retrieve, Insertable, Retrievable};
+use crate::db::{generic_insert, generic_retrieve, retrieve_param, Insertable, Retrievable};
 use eyre::Result;
 use rusqlite::{params, Connection, Row, ToSql};
 use serde::{Deserialize, Serialize};
