@@ -1,8 +1,12 @@
 // downloader.rs
 //
 use crate::{
-    db::connect_db, models::configs::Configs, models::course::CourseFile, utils::create_dir,
-    ws::ApiClient, utils::home_dir,
+    db::connect_db,
+    models::course::CourseFile,
+    models::configs::Configs,
+    utils::create_dir,
+    utils::home_dir,
+    ws::ApiClient,
 };
 use eyre::Result;
 use log;
@@ -19,7 +23,9 @@ pub async fn save_files(
         let fileurl = file.fileurl.unwrap();
         let mut file_path = home_dir();
 
-        let course_id = get_course_id(&filename).unwrap().unwrap();
+        let course_id = get_course_id(&filename)
+            .unwrap()
+            .expect("No course id associated to that file");
 
         if let Some(path) = config.get_course_path(course_id) {
             file_path = file_path.join(path);
