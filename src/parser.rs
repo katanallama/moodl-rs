@@ -1,84 +1,10 @@
 use crate::models::{course::CourseSection, grades::GradeItem};
 use chrono::NaiveDateTime;
 use eyre::Result;
+use fancy_regex::Captures;
 use fancy_regex::Regex;
 use html2md::parse_html;
 use std::{fs::File as StdFile, io::Write};
-
-pub fn parse_grades(grades: Vec<GradeItem>) -> String {
-    let mut max_name_len = 9;
-
-    grades.iter().for_each(|grade| {
-        if let Some(name) = &grade.itemname {
-            if !name.trim().is_empty() {
-                max_name_len = max_name_len.max(name.len());
-            }
-        }
-    });
-
-    let max_grade_len = 5;
-    let max_date_len = 19;
-    let max_range_len = 12;
-
-    let mut markdown = format!(
-        "| {:<name_width$} | {:<grade_width$} | {:<date_width$} | {:<range_width$} |\n",
-        "Item Name",
-        "Grade",
-        "Graded On",
-        "Grade Range",
-        name_width = max_name_len,
-        grade_width = max_grade_len,
-        date_width = max_date_len,
-        range_width = max_range_len
-    );
-    markdown.push_str(&format!(
-        "|{:-<name_dashes$}|{:-<grade_dashes$}|{:-<date_dashes$}|{:-<range_dashes$}|\n",
-        "",
-        "",
-        "",
-        "",
-        name_dashes = max_name_len + 2,
-        grade_dashes = max_grade_len + 2,
-        date_dashes = max_date_len + 2,
-        range_dashes = max_range_len + 2
-    ));
-
-    grades.into_iter().for_each(|grade| {
-        if let Some(name) = grade.itemname.as_ref().map(|s| remove_emojis(s)) {
-            if name.trim().is_empty() {
-                return;
-            }
-
-            let grade_val = if let Some(grade) = &grade.graderaw {
-                format!("{:#?}", grade)
-            } else {
-                String::from("N/A")
-            };
-
-            let grade_date = if let Some(date) = &grade.gradedategraded {
-                format!("{}", parse_date(*date))
-            } else {
-                String::from("N/A")
-            };
-
-            let grade_range = format!("{:#?} - {:#?}", grade.grademin, grade.grademax);
-
-            markdown.push_str(&format!(
-                "| {:<name_width$} | {:<grade_width$} | {:<date_width$} | {:<range_width$} |\n",
-                name,
-                grade_val,
-                grade_date,
-                grade_range,
-                name_width = max_name_len,
-                grade_width = max_grade_len,
-                date_width = max_date_len,
-                range_width = max_range_len
-            ));
-        }
-    });
-
-    markdown
-}
 
 pub fn parse_course(course: Vec<CourseSection>) -> String {
     let mut markdown = String::new();
@@ -86,9 +12,9 @@ pub fn parse_course(course: Vec<CourseSection>) -> String {
     course.into_iter().for_each(|section| {
         log::debug!("Section name: {}", section.name);
 
-        markdown.push_str(&format!("# {}", section.name));
+        markdown.push_str(&format!("# {}\n", section.name));
         let summary = clean_html(&section.summary);
-        markdown.push_str(&format!("\n{}", parse_html(&summary)));
+        markdown.push_str(&format!("{}\n", parse_html(&summary)));
         // markdown.push_str(&format!("{}\n\n", summary));
 
         let mut is_first_module = true;
@@ -100,7 +26,7 @@ pub fn parse_course(course: Vec<CourseSection>) -> String {
                 markdown.push_str(&format!("## {}", remove_emojis(&module.name)));
                 is_first_module = false;
             } else {
-                markdown.push_str(&format!("### {}", remove_emojis(&module.name)));
+                markdown.push_str(&format!("## {}", remove_emojis(&module.name)));
             }
 
             if let Some(desc) = &module.description {
@@ -132,6 +58,81 @@ pub fn parse_course(course: Vec<CourseSection>) -> String {
             markdown.push_str(&format!("\n\n"));
         });
     });
+    markdown
+}
+
+pub fn parse_grades(grades: Vec<GradeItem>) -> String {
+    let mut max_name_len = 9;
+
+    grades.iter().for_each(|grade| {
+        if let Some(name) = &grade.itemname {
+            if !name.trim().is_empty() {
+                max_name_len = max_name_len.max(name.len());
+            }
+        }
+    });
+
+    let max_grade_len = 5;
+    let max_date_len = 19;
+    let max_range_len = 12;
+
+    let mut markdown = format!(
+        "# Grades: \n\n| {:<name_width$} | {:<date_width$} | {:<range_width$} | {:<grade_width$} |\n",
+        "Item Name",
+        "Graded On",
+        "Range",
+        "Grade",
+        name_width = max_name_len,
+        date_width = max_date_len,
+        range_width = max_range_len,
+        grade_width = max_grade_len,
+    );
+    markdown.push_str(&format!(
+        "|{:-<name_dashes$}|{:-<date_dashes$}|{:-<range_dashes$}|{:-<grade_dashes$}|\n",
+        "",
+        "",
+        "",
+        "",
+        name_dashes = max_name_len + 2,
+        date_dashes = max_date_len + 2,
+        range_dashes = max_range_len + 2,
+        grade_dashes = max_grade_len + 2,
+    ));
+
+    grades.into_iter().for_each(|grade| {
+        if let Some(name) = grade.itemname.as_ref().map(|s| remove_emojis(s)) {
+            if name.trim().is_empty() {
+                return;
+            }
+
+            let grade_val = if let Some(grade) = &grade.graderaw {
+                format!("{:#?}", grade)
+            } else {
+                String::from("N/A")
+            };
+
+            let grade_date = if let Some(date) = &grade.gradedategraded {
+                format!("{}", parse_date(*date))
+            } else {
+                String::from("N/A")
+            };
+
+            let grade_range = format!("{:#?} - {:#?}", grade.grademin, grade.grademax);
+
+            markdown.push_str(&format!(
+                "| {:<name_width$} | {:<date_width$} | {:<range_width$} | {:<grade_width$} |\n",
+                name,
+                grade_date,
+                grade_range,
+                grade_val,
+                name_width = max_name_len,
+                date_width = max_date_len,
+                range_width = max_range_len,
+                grade_width = max_grade_len,
+            ));
+        }
+    });
+
     markdown
 }
 
@@ -173,6 +174,7 @@ pub fn clean_html(html: &String) -> String {
     }
 
     clean_html = remove_line_breaks(&clean_html);
+    clean_html = decrease_header_level(&clean_html);
 
     clean_html
 }
@@ -191,4 +193,17 @@ fn remove_emojis(s: &str) -> String {
 fn remove_line_breaks(input: &str) -> String {
     let re = Regex::new(r"\s+").unwrap();
     re.replace_all(input, " ").to_string()
+}
+
+fn decrease_header_level(input: &str) -> String {
+    let re = Regex::new(r"<h(\d)>").unwrap();
+    re.replace_all(input, |caps: &Captures| {
+        let level: u32 = caps.get(1).unwrap().as_str().parse().unwrap();
+        if level > 1 {
+            format!("<h{}>", level - 1)
+        } else {
+            format!("<h{}>", level)
+        }
+    })
+    .to_string()
 }

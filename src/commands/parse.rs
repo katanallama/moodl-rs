@@ -30,11 +30,10 @@ pub fn parse_command_handler(config: &Configs) -> Result<()> {
         let mut conn = connect_db()?;
         let structure = retrieve_course_structure(&mut conn, course.id)?;
         let grades = retrieve_course_grades(&mut conn, course.id)?;
-        // log::info!("{:#?}", grades);
 
-        let course_md = parse_course(structure);
+        let mut course_md = parse_course(structure);
         let grades_md = parse_grades(grades);
-        // log::info!("{:#?}", grades_md);
+        course_md.push_str(&grades_md);
 
         let mut file_path = home_dir();
         if let Some(course_path) = config.get_course_path(course.id) {
