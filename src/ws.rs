@@ -9,7 +9,8 @@ use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest;
 use serde::{Deserialize, Serialize};
-use std::{cmp::min, fs::File, io::Write};
+use std::{cmp::min, fs::metadata, fs::File, io::Write, path::Path};
+use log::{info, debug};
 
 const GET_ASSIGNMENTS: &str = "mod_assign_get_assignments";
 const GET_CONTENTS: &str = "core_course_get_contents";
@@ -66,7 +67,7 @@ pub struct QueryParameters<'a> {
 
 impl<'a> QueryParameters<'a> {
     pub fn new(client: &'a ApiClient) -> Self {
-        log::debug!("New API query created");
+        debug!("New API query created");
         QueryParameters {
             wsfunction: None,
             courseid: None,
@@ -117,7 +118,7 @@ impl ApiQuery for QueryParameters<'_> {
 
 impl ApiClient {
     pub fn new(base_url: &str, token: &str, userid: &i64) -> Self {
-        log::debug!("New API Client created");
+        debug!("New API Client created");
         ApiClient {
             base_url: base_url.to_string(),
             wstoken: token.to_string(),
@@ -127,7 +128,7 @@ impl ApiClient {
     }
 
     pub fn from_config(configs: &Configs) -> Result<Self> {
-        log::debug!(
+        debug!(
             "Using API config from file\napi - base_url: {:?} \napi - token: {:?}\napi - userid: {:?}",
             configs.api.base_url,
             configs.api.token,
@@ -151,11 +152,11 @@ impl ApiClient {
             .await?;
 
         let response_text = response.text().await?;
-        log::debug!("API Response: {}", &response_text);
+        debug!("API Response: {}", &response_text);
 
         // First, try to parse the response as an ApiError
         if let Ok(api_error) = serde_json::from_str::<ApiError>(&response_text) {
-            log::debug!("API Error:\n {:#?}", api_error);
+            debug!("API Error:\n {:#?}", api_error);
             // return Err(eyre::eyre!("API Error: {:?}", api_error));
         }
 
@@ -188,6 +189,37 @@ impl ApiClient {
             .content_length()
             .ok_or_else(|| eyre::eyre!("Failed to get content length from '{}'", &url))?;
 
+        if let Ok(metadata) = metadata(file_path) {
+            if metadata.len() == total_size {
+                if let Some(file_name) = Path::new(file_path).file_name() {
+                    if let Some(parent_dir) =
+                        Path::new(file_path).parent().and_then(|p| p.file_name())
+                    {
+                        let short_path = format!(
+                            "{}/{}",
+                            parent_dir.to_string_lossy(),
+                            file_name.to_string_lossy()
+                        );
+                        info!("File '{}' already downloaded and has the same size. Skipping download.", short_path);
+                    } else {
+                        info!(
+                            "File already downloaded and has the same size. Skipping download."
+                        );
+                    }
+                } else {
+                    info!("File already downloaded and has the same size. Skipping download.");
+                }
+                return Ok(());
+            }
+        }
+
+        if let Ok(metadata) = metadata(file_path) {
+            if metadata.len() == total_size {
+                info!("File already downloaded and has the same size. Skipping download.");
+                return Ok(());
+            }
+        }
+
         let pb = ProgressBar::new(total_size);
         pb.set_style(
             ProgressStyle::default_bar()
@@ -211,12 +243,12 @@ impl ApiClient {
         }
 
         pb.finish();
-        log::info!("Downloaded file {:?}", file_path);
+        info!("Downloaded file {:?}", file_path);
         Ok(())
     }
 
     pub async fn fetch_course_contents(&self, course_id: i64) -> Result<ApiResponse> {
-        log::info!("Fetching course {} content", course_id);
+        info!("Fetching course {} content", course_id);
         let query = QueryParameters::new(self)
             .function(GET_CONTENTS)
             .courseid(course_id);
@@ -224,7 +256,7 @@ impl ApiClient {
     }
 
     pub async fn fetch_course_grades(&self, course_id: i64) -> Result<ApiResponse> {
-        log::info!("Fetching course {} grades", course_id);
+        info!("Fetching course {} grades", course_id);
         let query = QueryParameters::new(self)
             .function(GET_GRADES)
             .courseid(course_id)
@@ -233,19 +265,19 @@ impl ApiClient {
     }
 
     pub async fn fetch_course_pages(&self) -> Result<ApiResponse> {
-        log::info!("Fetching course pages");
+        info!("Fetching course pages");
         let query = QueryParameters::new(self).function(GET_PAGES);
         self.fetch(query).await
     }
 
     pub async fn fetch_assignments(&self) -> Result<ApiResponse> {
-        log::info!("Fetching assignments");
+        info!("Fetching assignments");
         let query = QueryParameters::new(self).function(GET_ASSIGNMENTS);
         self.fetch(query).await
     }
 
     pub async fn fetch_user_courses(&self) -> Result<ApiResponse> {
-        log::info!("Fetching user courses");
+        info!("Fetching user courses");
         let query = QueryParameters::new(self)
             .function(GET_COURSES)
             .use_default_userid();
@@ -253,13 +285,13 @@ impl ApiClient {
     }
 
     pub async fn fetch_scorms(&self) -> Result<ApiResponse> {
-        log::info!("Fetching scorm modules");
+        info!("Fetching scorm modules");
         let query = QueryParameters::new(self).function(GET_SCORM);
         self.fetch(query).await
     }
 
     pub async fn fetch_user_id(&self) -> Result<ApiResponse> {
-        log::info!("Fetching user id");
+        info!("Fetching user id");
         let query = QueryParameters::new(self).function(GET_UID);
         self.fetch(query).await
     }
