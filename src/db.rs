@@ -167,7 +167,8 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
             maxattempt INTEGER,
             lastfetched DATETIME,
             courseid INTEGER,
-            UNIQUE(scormid)
+            UNIQUE(scormid),
+            FOREIGN KEY (coursemodule) REFERENCES Modules(moduleid)
         );",
         (),
     )
