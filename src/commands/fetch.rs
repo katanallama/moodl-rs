@@ -1,3 +1,5 @@
+use crate::models::scorm::insert_scorms;
+
 // commands.rs
 //
 use {
@@ -33,12 +35,12 @@ impl<'a> Command for FetchCommand<'a> {
         fetch_course_handler(&mut self.client, &mut conn, &self.config, pages).await?;
         fetch_assignment_handler(&mut self.client).await?;
         fetch_grade_handler(&mut self.client, &self.config).await?;
+        fetch_scorm_handler(&mut self.client).await?;
 
         Ok(())
     }
 }
 
-// TODO implement the db stuff for this
 pub async fn fetch_assignment_handler(client: &ApiClient) -> Result<()> {
     let response = client.fetch_assignments().await?;
     if let ApiResponse::Assignments(assignments) = response {
@@ -54,7 +56,7 @@ pub async fn fetch_grade_handler(client: &ApiClient, config: &Configs) -> Result
         let mut conn = connect_db()?;
         let response = client.fetch_course_grades(course.id).await?;
         if let ApiResponse::UserGrades(grades) = response {
-            // log::debug!("{:#?}", grades);
+            log::debug!("{:#?}", grades);
             insert_grades(&mut conn, grades.usergrades)?;
         } else {
             return Err(eyre::eyre!("Unexpected API response: {:?}", response));
@@ -81,10 +83,22 @@ pub async fn fetch_course_handler(
     for course in &config.courses {
         let response = client.fetch_course_contents(course.id).await?;
         if let ApiResponse::Sections(mut sections) = response {
+            log::debug!("{:#?}", sections);
             insert_course_sections(conn, &mut sections, &pages, course.id)?;
         } else {
             return Err(eyre::eyre!("Unexpected API response: {:?}", response));
         }
+    }
+    Ok(())
+}
+
+pub async fn fetch_scorm_handler(client: &ApiClient) -> Result<()> {
+    let response = client.fetch_scorms().await?;
+    if let ApiResponse::Scorms(scorms) = response {
+        log::debug!("{:#?}", scorms);
+        insert_scorms(&mut connect_db()?, scorms)?;
+    } else {
+        return Err(eyre::eyre!("Unexpected API response: {:?}", response));
     }
     Ok(())
 }

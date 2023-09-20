@@ -2,7 +2,7 @@
 //
 use crate::models::{
     assignments::Assignments, configs::Configs, course::CourseSection, course::Pages,
-    courses::Course, grades::CourseGrades, user::SiteInfo,
+    courses::Course, grades::CourseGrades, scorm::Scorms, user::SiteInfo,
 };
 use eyre::Result;
 use futures_util::StreamExt;
@@ -16,6 +16,7 @@ const GET_CONTENTS: &str = "core_course_get_contents";
 const GET_COURSES: &str = "core_enrol_get_users_courses";
 const GET_GRADES: &str = "gradereport_user_get_grade_items";
 const GET_PAGES: &str = "mod_page_get_pages_by_courses";
+const GET_SCORM: &str = "mod_scorm_get_scorms_by_courses";
 const GET_UID: &str = "core_webservice_get_site_info";
 
 #[derive(Clone)]
@@ -33,6 +34,7 @@ pub enum ApiResponse {
     SiteInfo(SiteInfo),
     Sections(Vec<CourseSection>),
     Course(Vec<Course>),
+    Scorms(Scorms),
     UserGrades(UserGradesResponse),
     Pages(Pages),
     Assignments(Assignments),
@@ -250,10 +252,15 @@ impl ApiClient {
         self.fetch(query).await
     }
 
+    pub async fn fetch_scorms(&self) -> Result<ApiResponse> {
+        log::info!("Fetching scorm modules");
+        let query = QueryParameters::new(self).function(GET_SCORM);
+        self.fetch(query).await
+    }
+
     pub async fn fetch_user_id(&self) -> Result<ApiResponse> {
         log::info!("Fetching user id");
         let query = QueryParameters::new(self).function(GET_UID);
         self.fetch(query).await
     }
 }
-

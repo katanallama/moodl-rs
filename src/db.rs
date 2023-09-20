@@ -135,7 +135,7 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
         );",
         (),
     )
-    .wrap_err("Failed to create Sections table")?;
+    .wrap_err("Failed to create Grades table")?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS Sections (
@@ -150,6 +150,28 @@ pub fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
         (),
     )
     .wrap_err("Failed to create Sections table")?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS Scorms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scormid INTEGER,
+            coursemodule INTEGER,
+            name TEXT,
+            intro TEXT,
+            packageurl TEXT,
+            localpath TEXT,
+            version INTEGER,
+            maxgrade INTEGER,
+            grademethod INTEGER,
+            whatgrade INTEGER,
+            maxattempt INTEGER,
+            lastfetched DATETIME,
+            courseid INTEGER,
+            UNIQUE(scormid)
+        );",
+        (),
+    )
+    .wrap_err("Failed to create Scorms table")?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS Modules (

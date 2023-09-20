@@ -3,4 +3,5 @@ pub mod configs;
 pub mod course;
 pub mod courses;
 pub mod grades;
+pub mod scorm;
 pub mod user;
