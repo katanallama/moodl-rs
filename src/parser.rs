@@ -97,8 +97,18 @@ fn parse_html(html: &str) -> String {
         }
     }
 
-    println!("{}", parser.output);
+    // println!("{}", parser.output);
     parser.output
+}
+
+fn is_variation_of(short: &str, long: &str) -> bool {
+    if !short.is_empty() || !long.is_empty() {
+        let short_cleaned = short.trim_end_matches("...");
+        let long_cleaned = long.replace("**", "");
+        return long_cleaned.contains(short_cleaned);
+    } else {
+        return false;
+    }
 }
 
 pub fn parse_course(course: Vec<CourseSection>) -> String {
@@ -112,39 +122,46 @@ pub fn parse_course(course: Vec<CourseSection>) -> String {
         markdown.push_str(&format!("{}\n", parse_html(&summary)));
 
         section.modules.into_iter().for_each(|module| {
-            log::debug!("Module name: {}", remove_emojis(&module.name));
+            log::debug!("Module name: {:#?}", remove_emojis(&module.name));
 
+            let mut cleaned_desc: String = "".to_string();
             if let Some(desc) = &module.description {
-                markdown.push_str(&format!("## {}", remove_emojis(&module.name)));
-
-                let desc = clean_html(&desc);
-                if desc.trim() != module.name.trim() {
-                    markdown.push_str(&format!("\n{}\n", parse_html(&desc)));
-                }
-            } else {
-                markdown.push_str(&format!("## {}", remove_emojis(&module.name)));
+                cleaned_desc = desc.to_string();
             }
 
-            match module.contents {
-                Some(files) => {
-                    files.into_iter().for_each(|mut file| {
-                        if let Some(ref mut name) = file.filename {
-                            *name = remove_emojis(&name);
-                            if let Some(path) = &file.filepath {
-                                log::debug!("Module file: {} at {}", name, path);
-                                markdown.push_str(&format!("\n[{}]", name));
-                                markdown.push_str(&format!("({})\n", path));
-                            } else if let Some(url) = &file.fileurl {
-                                markdown.push_str(&format!("\n[{}]", name));
+            cleaned_desc = clean_html(&cleaned_desc);
+            let parsed_desc = parse_html(&cleaned_desc);
+            let module_name = remove_emojis(&module.name);
+
+            // Only add name if it is not a variation of the name
+            if is_variation_of(&module_name, &parsed_desc) {
+                // markdown.push_str(&format!("\n## {}\n", module_name));
+                markdown.push_str(&format!("{}", parsed_desc));
+            } else {
+                markdown.push_str(&format!("\n## {}\n", module_name));
+                markdown.push_str(&format!("{}", parsed_desc));
+            }
+            // }
+
+            if let Some(files) = &module.contents {
+                files.into_iter().for_each(|file| {
+                    if let Some(name) = &file.filename {
+                        let clean_name = remove_emojis(&name);
+                        if let Some(path) = &file.filepath {
+                            log::debug!("Module file: {} at {}", clean_name, path);
+                            markdown.push_str(&format!("\n[{}]", clean_name));
+                            markdown.push_str(&format!("({})\n", path));
+                        } else {
+                            if let Some(url) = &file.fileurl {
+                                markdown.push_str(&format!("\n[{}]", clean_name));
                                 markdown.push_str(&format!("({})\n", url));
                             }
                         }
-                    });
-                }
-                _ => (),
+                    }
+                });
             }
-            markdown.push_str(&format!("\n\n"));
         });
+        markdown.push_str("\n\n");
     });
     markdown
 }
@@ -271,7 +288,7 @@ pub fn clean_html(html: &String) -> String {
     }
 
     clean_html = remove_line_breaks(&clean_html);
-    // clean_html = decrease_header_level(&clean_html);
+    clean_html = decrease_header_level(&clean_html);
 
     clean_html
 }
