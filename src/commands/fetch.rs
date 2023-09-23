@@ -1,4 +1,4 @@
-use crate::models::scorm::insert_scorms;
+use crate::models::{assignments::insert_assignments, scorm::insert_scorms};
 
 // commands.rs
 //
@@ -42,9 +42,11 @@ impl<'a> Command for FetchCommand<'a> {
 }
 
 pub async fn fetch_assignment_handler(client: &ApiClient) -> Result<()> {
+    let mut conn = connect_db()?;
     let response = client.fetch_assignments().await?;
     if let ApiResponse::Assignments(assignments) = response {
         log::debug!("{:#?}", assignments);
+        insert_assignments(&mut conn, assignments)?;
     } else {
         return Err(eyre::eyre!("Unexpected API response: {:?}", response));
     }
