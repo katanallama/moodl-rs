@@ -1,10 +1,105 @@
 use crate::models::{course::CourseSection, grades::GradeItem};
 use chrono::NaiveDateTime;
 use eyre::Result;
-use fancy_regex::Captures;
-use fancy_regex::Regex;
-use html2md::parse_html;
+use fancy_regex::{Captures, Regex};
+use scraper::Html;
 use std::{fs::File as StdFile, io::Write};
+
+trait Parser {
+    fn parse_text(&mut self, text: &str);
+    fn parse_start_tag(&mut self, tag: &str, attrs: &[(String, String)]);
+    fn parse_end_tag(&mut self, tag: &str);
+}
+
+struct MarkdownParser {
+    output: String,
+}
+
+impl MarkdownParser {
+    fn new() -> Self {
+        Self {
+            output: String::new(),
+        }
+    }
+}
+
+impl Parser for MarkdownParser {
+    fn parse_text(&mut self, text: &str) {
+        self.output.push_str(text);
+    }
+
+    fn parse_start_tag(&mut self, tag: &str, attrs: &[(String, String)]) {
+        match tag {
+            "h1" => self.output.push_str("\n# "),
+            "h2" => self.output.push_str("\n## "),
+            "h3" => self.output.push_str("\n### "),
+            "h4" => self.output.push_str("\n#### "),
+            "h5" => self.output.push_str("\n##### "),
+            "p" => (),
+            "ul" => (),
+            "li" => self.output.push_str("* "),
+            "b" | "strong" => self.output.push_str("**"),
+            "i" | "em" => self.output.push_str("_"),
+            "a" => {
+                if let Some(href) = attrs.iter().find(|&&(ref name, _)| name == "href") {
+                    self.output.push_str(&format!("[{}](", href.1));
+                }
+            }
+            _ => (),
+        }
+    }
+
+    fn parse_end_tag(&mut self, tag: &str) {
+        match tag {
+            "h1" | "h2" | "h3" | "h4" | "h5" => self.output.push_str("\n"),
+            "p" | "li" => self.output.push('\n'),
+            "b" | "strong" => self.output.push_str("**"),
+            "i" | "em" => self.output.push_str("_"),
+            "a" => self.output.push_str(")"),
+            _ => (),
+        }
+    }
+}
+
+fn traverse(element: scraper::ElementRef, parser: &mut dyn Parser) {
+    let tag_name = element.value().name.local.as_ref();
+    let attrs: Vec<(String, String)> = element
+        .value()
+        .attrs
+        .iter()
+        .map(|(name, value)| (name.local.to_string(), value.to_string()))
+        .collect();
+
+    parser.parse_start_tag(tag_name, &attrs);
+
+    for node in element.children() {
+        if node.value().is_text() {
+            if let Some(text_content) = node.value().as_text() {
+                parser.parse_text(text_content);
+            }
+        } else if node.value().is_element() {
+            let child_element = scraper::ElementRef::wrap(node).unwrap();
+            traverse(child_element, parser);
+        }
+    }
+
+    parser.parse_end_tag(tag_name);
+}
+
+fn parse_html(html: &str) -> String {
+    let fragment = Html::parse_fragment(html);
+
+    let mut parser = MarkdownParser::new();
+
+    for child in fragment.tree.root().children() {
+        if let Some(element) = scraper::ElementRef::wrap(child) {
+            traverse(element, &mut parser);
+        }
+    }
+
+    println!("{}", parser.output);
+    parser.output
+}
 
 pub fn parse_course(course: Vec<CourseSection>) -> String {
     let mut markdown = String::new();
@@ -15,26 +110,19 @@ pub fn parse_course(course: Vec<CourseSection>) -> String {
         markdown.push_str(&format!("# {}\n", section.name));
         let summary = clean_html(&section.summary);
         markdown.push_str(&format!("{}\n", parse_html(&summary)));
-        // markdown.push_str(&format!("{}\n\n", summary));
-
-        let mut is_first_module = true;
 
         section.modules.into_iter().for_each(|module| {
             log::debug!("Module name: {}", remove_emojis(&module.name));
 
-            if is_first_module {
-                markdown.push_str(&format!("## {}", remove_emojis(&module.name)));
-                is_first_module = false;
-            } else {
-                markdown.push_str(&format!("## {}", remove_emojis(&module.name)));
-            }
-
             if let Some(desc) = &module.description {
+                markdown.push_str(&format!("## {}", remove_emojis(&module.name)));
+
                 let desc = clean_html(&desc);
                 if desc.trim() != module.name.trim() {
                     markdown.push_str(&format!("\n{}\n", parse_html(&desc)));
-                    // markdown.push_str(&format!("\n{}\n", desc));
                 }
+            } else {
+                markdown.push_str(&format!("## {}", remove_emojis(&module.name)));
             }
 
             match module.contents {
@@ -149,11 +237,20 @@ pub fn clean_html(html: &String) -> String {
         r#" dir="ltr\""#,
         r#" lang="EN-US\""#,
         r#" class="\""#,
+        r#" "background-color: rgb(255, 207, 53);\""#,
         r#" style="text-align: left;\""#,
+        r#" style="text-align: center;\""#,
         r"<br>",
+        r"no-overflow",
+        r"<span>",
+        r"</span>",
         r"</ br>",
         r"<br />",
-        r"\r",
+        r#" class="\""#,
+        r"<div>",
+        r"</div>",
+        r"&nbsp;",
+        // r"\r",
     ];
 
     for tag in tags_to_remove {
@@ -174,7 +271,7 @@ pub fn clean_html(html: &String) -> String {
     }
 
     clean_html = remove_line_breaks(&clean_html);
-    clean_html = decrease_header_level(&clean_html);
+    // clean_html = decrease_header_level(&clean_html);
 
     clean_html
 }
