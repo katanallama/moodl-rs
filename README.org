@@ -18,7 +18,16 @@ Moodl-rs is a utility tool designed to create offline versions of your universit
 - Ensure that [[https://www.sqlite.org/download.html][sqlite]] is installed on your system. It is included in the flake if you're using nix.
 - You will need to have Rust's ~cargo~ installed to run the application for now. If there's enough interest precompiled binaries will become available.
 
-*** Installation
+*** Running from the binary
+
+A precompiled windows binary is available as a [[https://github.com/katanallama/moodl-rs/releases][v0.1-beta]] release meant to run as a standalone application from the command line.
+
+#+begin_src sh
+cd path\to\your\moodl-rs.exe
+moodl-rs.exe
+#+end_src
+
+*** Installation from Source
 
 1. Clone the repository to your local system.
 2. Navigate to the project directory in the terminal.
